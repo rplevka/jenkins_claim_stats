@@ -7,8 +7,7 @@ import requests
 import yaml
 import pickle
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 requests.packages.urllib3.disable_warnings()
 config = {}
@@ -165,7 +164,7 @@ def claim(test, reason, sticky=False):
 
     :param sticky: whether to make the claim sticky (False by default)
     '''
-    logger.info('claiming {0} with reason: {1}'.format(test, reason))
+    logging.info('claiming {0} with reason: {1}'.format(test, reason))
     claim_req = requests.post(
         u'{0}/claim/claim'.format(test['url']),
         auth=requests.auth.HTTPBasicAuth(
@@ -181,8 +180,9 @@ def claim(test, reason, sticky=False):
     return(claim_req)
 
 
-def claim_by_rules(fails, rules):
+def claim_by_rules(fails, rules, dryrun=False):
     for rule in rules:
         for fail in [i for i in fails if re.search(rule['pattern'], i['errorDetails'])]:
-            logger.info(u'{0} matching pattern: {1}'.format(fail['name'], rule['pattern']))
-            claim(fail, rule['reason'])
+            logging.info(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['pattern'], fail['url']))
+            if not dryrun:
+                claim(fail, rule['reason'])
