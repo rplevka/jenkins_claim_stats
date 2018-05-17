@@ -10,7 +10,7 @@ distros = reports[tiers[0]].keys()
 
 for i in tiers:
      for j in reports[i].keys():
-         fs = claims.parse_fails(reports[i][j])
+         fs = claims.filter_fails(reports[i][j])
          for f in fs:
              f['distro'] = j
              f['tier'] = i

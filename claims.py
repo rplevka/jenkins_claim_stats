@@ -17,6 +17,7 @@ with open("config.yaml", "r") as file:
     except yaml.YAMLERROR as exc:
         print(exc)
 
+FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
 PARAMS = {
     u'tree': u'suites[cases[className,name,status,errorDetails,errorStackTrace,testActions[reason]]]{0}'
     }
@@ -60,10 +61,10 @@ def fetch_all_reports(job=None, build=None):
     return(results)
 
 
-def parse_fails(bld):
+def filter_fails(bld):
     if not bld:
         bld = []
-    return([i for i in bld if (i.get('status') == "FAILED" or i.get('status') == "ERROR" or i.get('status') == "REGRESSION")])
+    return([i for i in bld if i.get('status') in FAIL_STATUSES])
 
 # fetch_test_report(config['url'], config['job'], config['bld'])
 # fetch the failed tests with claim reasons
