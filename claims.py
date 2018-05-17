@@ -1,9 +1,11 @@
 from __future__ import division
+import os
 import json
 import logging
 import re
 import requests
 import yaml
+import pickle
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -46,6 +48,15 @@ def fetch_test_report(url, job, build):
 
 
 def fetch_all_reports(job=None, build=None):
+    if 'DEBUG_CLAIMS_CACHE' in os.environ:
+        if os.path.isfile(os.environ['DEBUG_CLAIMS_CACHE']):
+            print "DEBUG: Because environment variable DEBUG_CLAIMS_CACHE is set to '{0}', loading data from there".format(
+                os.environ['DEBUG_CLAIMS_CACHE'])
+            return pickle.load(open(os.environ['DEBUG_CLAIMS_CACHE'], 'r'))
+        else:
+            print "DEBUG: Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
+                os.environ['DEBUG_CLAIMS_CACHE'])
+
     if job is None:
         job = config['job']
     if build is None:
@@ -58,6 +69,10 @@ def fetch_all_reports(job=None, build=None):
             tr = fetch_test_report(config['url'], job1, build)
             fails = tr #parse_fails(tr)
             results['t{}'.format(i)]['el{}'.format(j)] = fails
+
+    if 'DEBUG_CLAIMS_CACHE' in os.environ:
+        pickle.dump(results, open(os.environ['DEBUG_CLAIMS_CACHE'], 'w'))
+
     return(results)
 
 
