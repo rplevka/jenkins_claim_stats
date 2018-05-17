@@ -61,6 +61,28 @@ def fetch_all_reports(job=None, build=None):
     return(results)
 
 
+def flatten_reports(reports):
+    """
+    From tree dict like this:
+        {
+            'tier1': {
+                'el7': [...]
+            },
+            ...
+        }
+    create a flat list of test results with distro and tier added.
+    """
+    reports_flat = []
+    for tier in reports.keys():
+        for distro in reports[tier].keys():
+            if reports[tier][distro] is not None:
+                for report in reports[tier][distro]:
+                    report['distro'] = distro
+                    report['tier'] = tier
+                    reports_flat.append(report)
+    return reports_flat
+
+
 def filter_fails(bld):
     if not bld:
         bld = []
@@ -69,6 +91,13 @@ def filter_fails(bld):
 # fetch_test_report(config['url'], config['job'], config['bld'])
 # fetch the failed tests with claim reasons
 # bld = fetch_test_report(config['url'], config['job'], config['build'])
+
+
+def filter_not_claimed(reports):
+    """
+    Only return results which do not have claim/waiver
+    """
+    return [i for i in reports if not i['testActions'][0]['reason']]
 
 
 def load_rules():
