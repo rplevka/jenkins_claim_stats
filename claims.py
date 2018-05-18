@@ -17,6 +17,19 @@ with open("config.yaml", "r") as file:
         config = yaml.load(file)
     except yaml.YAMLERROR as exc:
         print(exc)
+# get the jenkins crumb (csrf protection)
+crumb_request = requests.get(
+        '{0}/crumbIssuer/api/json'.format(config['url']),
+        auth=requests.auth.HTTPBasicAuth(config['usr'], config['pwd']),
+        verify=False
+    )
+if crumb_request.status_code != 200:
+    raise requests.HTTPError(
+            'failed to obtain crumb: {0}'.format(crumb_request.reason)
+          )
+else:
+    crumb = json.loads(crumb_request.text)
+    headers = {crumb['crumbRequestField']: crumb['crumb']}
 
 FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
 PARAMS = {
@@ -155,7 +168,7 @@ def get_endpoints_failure_ratio(total, fails):
     return {i: (f[i] / t[i]) * 100 for i in ep}
 
 
-def claim(test, reason, sticky=False):
+def claim(test, reason, sticky=False, propagate=False):
     '''Claims a given test with a given reason
 
     :param test: a dict test representation (need to contain the 'url' key)
@@ -168,10 +181,11 @@ def claim(test, reason, sticky=False):
     claim_req = requests.post(
         u'{0}/claim/claim'.format(test['url']),
         auth=requests.auth.HTTPBasicAuth(
-            config['usr'],
-            config['pwd']
+            unicode(config['usr']),
+            unicode(config['pwd'])
         ),
-        data={u'json': u'{{"assignee": "", "reason": "{0}", "sticky": {1}}}'.format(reason, sticky)},
+        data={u'json': u'{{"assignee": "", "reason": "{0}", "sticky": {1}, "propagateToFollowingBuilds": {2}}}'.format(reason, sticky, propagate)},
+        headers=headers,
         allow_redirects=False,
         verify=False
     )
