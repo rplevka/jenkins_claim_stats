@@ -209,7 +209,8 @@ def claim(test, reason, sticky=False, propagate=False):
 
 def claim_by_rules(fails, rules, dryrun=False):
     for rule in rules:
-        for fail in [i for i in fails if re.search(rule['pattern'], i['errorDetails'])]:
-            logging.debug(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['pattern'], fail['url']))
+        field = rule.get('field') or 'errorDetails'
+        for fail in [i for i in fails if re.search(rule['pattern'], i[field])]:
+            logging.info(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['pattern'], fail['url']))
             if not dryrun:
                 claim(fail, rule['reason'])
