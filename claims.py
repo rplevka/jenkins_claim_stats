@@ -190,7 +190,7 @@ def claim(test, reason, sticky=False, propagate=False):
 
     :param sticky: whether to make the claim sticky (False by default)
     '''
-    logging.info('claiming {0} with reason: {1}'.format(test['url'], reason))
+    logging.info('claiming {0} with reason: {1}'.format(test["className"]+"::"+test["name"], reason))
     claim_req = requests.post(
         u'{0}/claim/claim'.format(test['url']),
         auth=requests.auth.HTTPBasicAuth(
