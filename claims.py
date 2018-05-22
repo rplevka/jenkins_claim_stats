@@ -33,7 +33,7 @@ else:
 
 FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
 PARAMS = {
-    u'tree': u'suites[cases[className,name,status,errorDetails,errorStackTrace,testActions[reason]]]{0}'
+    u'tree': u'suites[cases[className,duration,name,status,stdout,errorDetails,errorStackTrace,testActions[reason]]]{0}'
     }
 ep = [u'ui', u'api', u'cli']
 
