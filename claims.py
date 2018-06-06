@@ -133,6 +133,13 @@ def filter_fails(bld):
 # bld = fetch_test_report(config['url'], config['job'], config['build'])
 
 
+def filter_claimed(reports):
+    """
+    Only return results which do not have claim/waiver
+    """
+    return [i for i in reports if i['testActions'][0]['reason']]
+
+
 def filter_not_claimed(reports):
     """
     Only return results which do not have claim/waiver
