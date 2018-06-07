@@ -17,7 +17,10 @@ print(tabulate.tabulate(
     [[stat_all, stat_failed, stat_claimed]],
     headers=['all reports', 'failures', 'claimed failures']))
 
+rules = claims.load_rules()
+rules_reasons = [r['reason'] for r in rules]
 reports_per_reason = {'UNKNOWN': stat_failed-stat_claimed}
+reports_per_reason.update({r:0 for r in rules_reasons})
 for report in reports_claimed:
     reason = report['testActions'][0]['reason']
     if reason not in reports_per_reason:
@@ -25,9 +28,11 @@ for report in reports_claimed:
     reports_per_reason[reason] += 1
 
 print("\nHow various reasons for claims are used")
+reports_per_reason = sorted(reports_per_reason.items(), key=lambda x: x[1], reverse=True)
+reports_per_reason = [(r, c, r in rules_reasons) for r, c in reports_per_reason]
 print(tabulate.tabulate(
-    sorted(reports_per_reason.items(), key=lambda x: x[1], reverse=True),
-    headers=['claim reason', 'number of times']))
+    reports_per_reason,
+    headers=['claim reason', 'number of times', 'is it in current knowleadgebase?']))
 
 reports_per_class = {}
 for report in reports:
