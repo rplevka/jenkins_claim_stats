@@ -1,5 +1,6 @@
 from __future__ import division
 import os
+import sys
 import json
 import logging
 import re
@@ -13,10 +14,7 @@ requests.packages.urllib3.disable_warnings()
 config = {}
 # load config
 with open("config.yaml", "r") as file:
-    try:
-        config = yaml.load(file)
-    except yaml.YAMLERROR as exc:
-        print(exc)
+    config = yaml.load(file)
 # get the jenkins crumb (csrf protection)
 crumb_request = requests.get(
         '{0}/crumbIssuer/api/json'.format(config['url']),
@@ -75,11 +73,11 @@ def fetch_test_report(url=None, job=None, build=None, build_url=None):
 def fetch_all_reports(job=None, build=None):
     if 'DEBUG_CLAIMS_CACHE' in os.environ:
         if os.path.isfile(os.environ['DEBUG_CLAIMS_CACHE']):
-            print("DEBUG: Because environment variable DEBUG_CLAIMS_CACHE is set to '{0}', loading data from there".format(
+            logging.debug("Because environment variable DEBUG_CLAIMS_CACHE is set to '{0}', loading data from there".format(
                 os.environ['DEBUG_CLAIMS_CACHE']))
             return pickle.load(open(os.environ['DEBUG_CLAIMS_CACHE'], 'r'))
         else:
-            print("DEBUG: Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
+            loading.debug("Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
                 os.environ['DEBUG_CLAIMS_CACHE']))
 
     if job is None:
