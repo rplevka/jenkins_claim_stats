@@ -214,10 +214,39 @@ def claim(test, reason, sticky=False, propagate=False):
     return(claim_req)
 
 
+def rule_matches(data, rule, indentation=0):
+    """
+    Returns True id data matches to rule, orhervise returns False
+    """
+    logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, data, rule, indentation))
+    if 'field' in rule and 'pattern' in rule:
+        # This is simple rule, we can just check regexp against given field and we are done
+        assert rule['field'] in data
+        out = re.search(rule['pattern'], data[rule['field']]) is not None
+        logging.debug("%s=> %s" % (" "*indentation, out))
+        return out
+    elif 'AND' in rule:
+        # We need to check if all sub-rules in list of rules rule['AND'] matches
+        out = None
+        for r in rule['AND']:
+            r_out = rule_matches(data, r, indentation+4)
+            out = r_out if out is None else out and r_out
+            if not out:
+                break
+        return out
+    elif 'OR' in rule:
+        # We need to check if at least one sub-rule in list of rules rule['OR'] matches
+        for r in rule['OR']:
+            if rule_matches(data, r, indentation+4):
+                return True
+        return False
+    else:
+        raise Exception('Rule %s not formatted correctly' % rule)
+
+
 def claim_by_rules(fails, rules, dryrun=False):
     for rule in rules:
-        field = rule.get('field') or 'errorDetails'
-        for fail in [i for i in fails if re.search(rule['pattern'], i[field])]:
-            logging.info(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['pattern'], fail['url']))
+        for fail in [i for i in fails if rule_matches(i, rule)]:
+            logging.info(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['reason'], fail['url']))
             if not dryrun:
                 claim(fail, rule['reason'])
