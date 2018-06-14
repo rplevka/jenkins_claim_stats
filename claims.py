@@ -77,7 +77,7 @@ def fetch_all_reports(job=None, build=None):
                 os.environ['DEBUG_CLAIMS_CACHE']))
             return pickle.load(open(os.environ['DEBUG_CLAIMS_CACHE'], 'r'))
         else:
-            loading.debug("Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
+            logging.debug("Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
                 os.environ['DEBUG_CLAIMS_CACHE']))
 
     if job is None:
