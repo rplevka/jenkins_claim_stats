@@ -61,17 +61,6 @@ class Case(collections.UserDict):
     def __init__(self, data):
         self.data = data
 
-    def is_failed(self):
-        return self['status'] in self.FAIL_STATUSES
-
-    def is_claimed(self):
-        return self['status'] in self.FAIL_STATUSES \
-            and self['testActions'][0].get('reason'])
-
-    def is_unclaimed(self):
-        return self['status'] in self.FAIL_STATUSES \
-            and not self['testActions'][0].get('reason'])
-
     def matches_to_rule(self, rule, indentation=0):
         """
         Returns True if result matches to rule, orhervise returns False
@@ -200,24 +189,6 @@ class Report(collections.UserList):
 
         return(cases)
 
-    def get_failed(self):
-        """
-        Return only failed results
-        """
-        return [i for i in self.data if i.is_failed()]
-
-    def get_claimed(self):
-        """
-        Only return failed results which do not have claim/waiver
-        """
-        return [i for i in self.data if i.is_claimed()]
-
-    def get_unclaimed(self):
-        """
-        Only return results which do not have claim/waiver
-        """
-        return [i for i in self.data if i.is_unclaimed()]
-
 
 class Ruleset(collections.UserList):
 
@@ -228,7 +199,7 @@ class Ruleset(collections.UserList):
 
 def claim_by_rules(report, rules, dryrun=False):
     for rule in rules:
-        for case in report.get_unclaimed():
+        for case in [i for i in report if i['status'] in Case.FAIL_STATUSES and not i['testActions'][0].get('reason')]:
             if case.matches_to_rule(rule):
                 logging.info(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
                 if not dryrun:

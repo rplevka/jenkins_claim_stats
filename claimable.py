@@ -3,7 +3,7 @@
 
 import claims
 
-results = claims.Report()
+report = claims.Report()
 rules = claims.Ruleset()
 
-claims.claim_by_rules(results, rules, dryrun=False)
+claims.claim_by_rules(report, rules, dryrun=True)

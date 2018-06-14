@@ -6,9 +6,9 @@ import tabulate
 reports = claims.Report()
 
 stat_all = len(reports)
-reports_fails = reports.get_failed()
+reports_fails = [i for i in reports if i['status'] in claims.Case.FAIL_STATUSES]
 stat_failed = len(reports_fails)
-reports_claimed = reports.get_claimed()
+reports_claimed = [i for i in reports_fails if i['testActions'][0].get('reason')]
 stat_claimed = len(reports_claimed)
 
 print("\nOverall stats")
