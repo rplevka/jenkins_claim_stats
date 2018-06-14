@@ -66,12 +66,11 @@ class Case(collections.UserDict):
 
     def is_claimed(self):
         return self['status'] in self.FAIL_STATUSES \
-            and 'reason' in self['testActions'][0] \
-            and self['testActions'][0]['reason']
+            and self['testActions'][0].get('reason'])
 
     def is_unclaimed(self):
         return self['status'] in self.FAIL_STATUSES \
-            and 'reason' not in self['testActions'][0]
+            and not self['testActions'][0].get('reason'])
 
     def matches_to_rule(self, rule, indentation=0):
         """
