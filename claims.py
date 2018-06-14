@@ -121,7 +121,7 @@ class Jenkins(object):
 
 
 
-class Results(collections.UserList):
+class Report(collections.UserList):
 
     TIERS = [1, 2, 3, 4]
     RHELS = [6, 7]
@@ -220,7 +220,7 @@ class Results(collections.UserList):
         return out
 
 
-class Rules(collections.UserList):
+class Ruleset(collections.UserList):
 
     def __init__(self):
         with open('kb.json', 'r') as fp:

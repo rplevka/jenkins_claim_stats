@@ -5,7 +5,7 @@ import tabulate
 
 config = claims.Config()
 jenkins = claims.Jenkins(config)
-reports = claims.Results(config, jenkins)
+reports = claims.Report(config, jenkins)
 
 stat_all = len(reports)
 reports_fails = reports.get_failed()
@@ -18,7 +18,7 @@ print(tabulate.tabulate(
     [[stat_all, stat_failed, stat_claimed]],
     headers=['all reports', 'failures', 'claimed failures']))
 
-rules = claims.Rules()
+rules = claims.Ruleset()
 rules_reasons = [r['reason'] for r in rules]
 reports_per_reason = {'UNKNOWN': stat_failed-stat_claimed}
 reports_per_reason.update({r:0 for r in rules_reasons})
