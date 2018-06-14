@@ -3,9 +3,7 @@
 import claims
 import tabulate
 
-config = claims.Config()
-jenkins = claims.Jenkins(config)
-reports = claims.Report(config, jenkins)
+reports = claims.Report()
 
 stat_all = len(reports)
 reports_fails = reports.get_failed()

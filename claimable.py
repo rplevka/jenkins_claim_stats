@@ -3,9 +3,7 @@
 
 import claims
 
-config = claims.Config()
-jenkins = claims.Jenkins(config)
-results = claims.Report(config, jenkins).get_failed().get_unclaimed()
+results = claims.Report()
 rules = claims.Ruleset()
 
-results.claim_by_rules(rules, dryrun=False)
+claims.claim_by_rules(results, rules, dryrun=False)
