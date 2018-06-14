@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from __future__ import division
 import os
 import sys
@@ -7,61 +9,74 @@ import re
 import requests
 import yaml
 import pickle
+import collections
 
 logging.basicConfig(level=logging.INFO)
 
-requests.packages.urllib3.disable_warnings()
-config = {}
-# load config
-with open("config.yaml", "r") as file:
-    config = yaml.load(file)
-# get the jenkins crumb (csrf protection)
-crumb_request = requests.get(
-        '{0}/crumbIssuer/api/json'.format(config['url']),
-        auth=requests.auth.HTTPBasicAuth(config['usr'], config['pwd']),
-        verify=False
-    )
-if crumb_request.status_code != 200:
-    raise requests.HTTPError(
-            'failed to obtain crumb: {0}'.format(crumb_request.reason)
-          )
-else:
-    crumb = json.loads(crumb_request.text)
-    headers = {crumb['crumbRequestField']: crumb['crumb']}
+class Config(collections.UserDict):
+    def __init__(self):
+        with open("config.yaml", "r") as file:
+            self.data = yaml.load(file)
 
-FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
-PARAMS = {
-    u'tree': u'suites[cases[className,duration,name,status,stdout,errorDetails,errorStackTrace,testActions[reason]]]{0}'
+        # If cache is configured, save it into configuration
+        if 'DEBUG_CLAIMS_CACHE' in os.environ:
+            self.data['cache'] = os.environ['DEBUG_CLAIMS_CACHE']
+        else:
+            self.data['cache'] = None
+
+
+class Jenkins(object):
+
+    PULL_PARAMS = {
+        u'tree': u'suites[cases[className,duration,name,status,stdout,errorDetails,errorStackTrace,testActions[reason]]]{0}'
     }
-ep = [u'ui', u'api', u'cli']
 
+    def __init__(self, config):
+        self.config = config
+        self.headers = None
 
-def fetch_test_report(url=None, job=None, build=None, build_url=None):
-    '''fetches the test report for a given jenkins url, job and build
-    or a given complete build url
-    Usage:
-        fetch_test_report(url=jenkins_url, job=job_name, build=build_id)
-        or
-        fetch_test_report(build_url=fullbuildurl)
-    Returns:
-        a List of test dicts
-    '''
-    if build_url is None:
-        if not(url and job and build):
-            raise TypeError('fetch_test_report requires either url+job+build or build_url params')
-        build_url = u'{0}/job/{1}/{2}'.format(url, job, build)
-    bld_req = requests.get(
-        build_url+'/testReport/api/json',
-        auth=requests.auth.HTTPBasicAuth(
-            config['usr'],
-            config['pwd']
-        ),
-        params=PARAMS,
-        verify=False
-    )
+    def _init_headers(self):
+        requests.packages.urllib3.disable_warnings()
 
-    if bld_req.status_code == 200:
+        # Get the Jenkins crumb (csrf protection)
+        crumb_request = requests.get(
+                '{0}/crumbIssuer/api/json'.format(self.config['url']),
+                auth=requests.auth.HTTPBasicAuth(self.config['usr'], self.config['pwd']),
+                verify=False
+            )
+
+        if crumb_request.status_code != 200:
+            raise requests.HTTPError(
+                'Failed to obtain crumb: {0}'.format(crumb_request.reason))
+
+        crumb = json.loads(crumb_request.text)
+        self.headers = {crumb['crumbRequestField']: crumb['crumb']}
+
+    def pull_reports(self, job, build):
+        """
+        Fetches the test report for a given job and build
+        """
+        build_url = '{0}/job/{1}/{2}'.format(
+            self.config['url'], job, build)
+
+        logging.debug("Getting {}".format(build_url))
+        bld_req = requests.get(
+            build_url + '/testReport/api/json',
+            auth=requests.auth.HTTPBasicAuth(
+                self.config['usr'], self.config['pwd']),
+            params=self.PULL_PARAMS,
+            verify=False
+        )
+
+        if bld_req.status_code == 404:
+            return []
+        if bld_req.status_code != 200:
+            raise requests.HTTPError(
+                'Failed to obtain: {0}'.format(bld_req))
+
         cases = json.loads(bld_req.text)['suites'][0]['cases']
+
+        # Enritch individual reports with URL
         for c in cases:
             className = c['className'].split('.')[-1]
             testPath = '.'.join(c['className'].split('.')[:-1])
@@ -69,182 +84,144 @@ def fetch_test_report(url=None, job=None, build=None, build_url=None):
 
         return(cases)
 
+    def push_claim(self, test, reason, sticky=False, propagate=False):
+        '''Claims a given test with a given reason
 
-def fetch_all_reports(job=None, build=None):
-    if 'DEBUG_CLAIMS_CACHE' in os.environ:
-        if os.path.isfile(os.environ['DEBUG_CLAIMS_CACHE']):
-            logging.debug("Because environment variable DEBUG_CLAIMS_CACHE is set to '{0}', loading data from there".format(
-                os.environ['DEBUG_CLAIMS_CACHE']))
-            return pickle.load(open(os.environ['DEBUG_CLAIMS_CACHE'], 'r'))
+        :param test: a dict test representation (need to contain the 'url' key)
+
+        :param reason: string with a comment added to a claim (ideally this is a link to a bug or issue)
+
+        :param sticky: whether to make the claim sticky (False by default)
+
+        :param propagate: should jenkins auto-claim next time if same test fails again? (False by default)
+        '''
+        logging.info('claiming {0} with reason: {1}'.format(test["className"]+"::"+test["name"], reason))
+
+        if self.headers is None:
+            self._init_headers()
+
+        claim_req = requests.post(
+            u'{0}/claim/claim'.format(test['url']),
+            auth=requests.auth.HTTPBasicAuth(
+                self.config['usr'],
+                self.config['pwd']
+            ),
+            data={u'json': u'{{"assignee": "", "reason": "{0}", "sticky": {1}, "propagateToFollowingBuilds": {2}}}'.format(reason, sticky, propagate)},
+            headers=self.headers,
+            allow_redirects=False,
+            verify=False
+        )
+
+        if bld_req.status_code != 302:
+            raise requests.HTTPError(
+                'Failed to claim: {0}'.format(claim_req))
+
+        test['testActions'][0]['reason'] = reason
+        return(claim_req)
+
+
+
+class Results(collections.UserList):
+
+    TIERS = [1, 2, 3, 4]
+    RHELS = [6, 7]
+    FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
+
+    def __init__(self, config, jenkins):
+        self.config = config
+        self.jenkins = jenkins
+
+        # If cache is configured, load data from it
+        if config['cache']:
+            if os.path.isfile(config['cache']):
+                logging.debug("Because cache is set to '{0}', loading data from there".format(
+                    config['cache']))
+                self.data = pickle.load(open(config['cache'], 'rb'))
+                return
+            else:
+                logging.debug("Cache set to '{0}' but that file does not exist, creating one".format(
+                    config['cache']))
+
+        self.data = []
+        for i in self.TIERS:
+            for j in self.RHELS:
+                for report in jenkins.pull_reports(
+                                config['job'].format(i, j),
+                                config['bld']):
+                    report['tier'] = 't{}'.format(i)
+                    report['distro'] = 'el{}'.format(j)
+                    self.data.append(report)
+
+        if config['cache']:
+            pickle.dump(self.data, open(config['cache'], 'wb'))
+
+    def copy(self):
+        return self.__class__(self.config, self.jenkins)
+
+    def rule_matches(self, result, rule, indentation=0):
+        """
+        Returns True id result matches to rule, orhervise returns False
+        """
+        logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, result, rule, indentation))
+        if 'field' in rule and 'pattern' in rule:
+            # This is simple rule, we can just check regexp against given field and we are done
+            assert rule['field'] in result
+            out = re.search(rule['pattern'], result[rule['field']]) is not None
+            logging.debug("%s=> %s" % (" "*indentation, out))
+            return out
+        elif 'AND' in rule:
+            # We need to check if all sub-rules in list of rules rule['AND'] matches
+            out = None
+            for r in rule['AND']:
+                r_out = self.rule_matches(result, r, indentation+4)
+                out = r_out if out is None else out and r_out
+                if not out:
+                    break
+            return out
+        elif 'OR' in rule:
+            # We need to check if at least one sub-rule in list of rules rule['OR'] matches
+            for r in rule['OR']:
+                if self.rule_matches(result, r, indentation+4):
+                    return True
+            return False
         else:
-            logging.debug("Environment variable DEBUG_CLAIMS_CACHE set to '{0}' but that file does not exist, creating one".format(
-                os.environ['DEBUG_CLAIMS_CACHE']))
+            raise Exception('Rule %s not formatted correctly' % rule)
 
-    if job is None:
-        job = config['job']
-    if build is None:
-        build = config['bld']
-    results = {}
-    for i in list(reversed(range(1, 5))):
-        results['t{}'.format(i)] = {}
-        for j in [6, 7]:
-            job1 = job.format(i, j)
-            tr = fetch_test_report(config['url'], job1, build)
-            fails = tr #parse_fails(tr)
-            results['t{}'.format(i)]['el{}'.format(j)] = fails
+    def claim_by_rules(self, rules, dryrun=False):
+        for rule in rules:
+            for result in self.get_failed():
+                if self.rule_matches(result, rule):
+                    logging.info(u"{0}::{1} matching pattern for '{2}' on {3}".format(result['className'], result['name'], rule['reason'], result['url']))
+                    if not dryrun:
+                        self.jenkins.push_claim(result, rule['reason'])
 
-    if 'DEBUG_CLAIMS_CACHE' in os.environ:
-        pickle.dump(results, open(os.environ['DEBUG_CLAIMS_CACHE'], 'w'))
-
-    return(results)
-
-
-def flatten_reports(reports):
-    """
-    From tree dict like this:
-        {
-            'tier1': {
-                'el7': [...]
-            },
-            ...
-        }
-    create a flat list of test results with distro and tier added.
-    """
-    reports_flat = []
-    for tier in reports.keys():
-        for distro in reports[tier].keys():
-            if reports[tier][distro] is not None:
-                for report in reports[tier][distro]:
-                    report['distro'] = distro
-                    report['tier'] = tier
-                    reports_flat.append(report)
-    return reports_flat
-
-
-def filter_fails(bld):
-    if not bld:
-        bld = []
-    return([i for i in bld if i.get('status') in FAIL_STATUSES])
-
-# fetch_test_report(config['url'], config['job'], config['bld'])
-# fetch the failed tests with claim reasons
-# bld = fetch_test_report(config['url'], config['job'], config['build'])
-
-
-def filter_claimed(reports):
-    """
-    Only return results which do not have claim/waiver
-    """
-    return [i for i in reports if i['testActions'][0]['reason']]
-
-
-def filter_not_claimed(reports):
-    """
-    Only return results which do not have claim/waiver
-    """
-    return [i for i in reports if not i['testActions'][0]['reason']]
-
-
-def load_rules():
-        with open('kb.json', 'r') as file:
-            return json.loads(file.read())
-            file.close()
-
-
-def parse_reasons(fails, fallback=False):
-    ''' parses the claim reasons from the given list of tests
-
-    :param fails: An input list of tests
-    :param fallback: Whether to replace the reason by
-        the 'ErrorDetails' field if 'reason' is None
-    '''
-    reasons = {}
-    for f in fails:
-        if(fallback and not f['testActions'][0]['reason']):
-            reason = f.get('errorDetails')
-        else:
-            reason = f['testActions'][0]['reason']
-        if reasons.get(reason):
-            reasons[reason] += 1
-        else:
-            reasons[reason] = 1
-    return(reasons)
-
-
-def get_endpoints_ratio(tests, ep):
-    endpoints = {i: 0 for i in ep}
-    for t in tests:
-        for e in endpoints.keys():
-            if u'tests.foreman.{}'.format(e) in t['className']:
-                endpoints[e] += 1
-    return endpoints
-
-
-def get_endpoints_failure_ratio(total, fails):
-    f = get_endpoints_ratio(fails, ep)
-    t = get_endpoints_ratio(total, ep)
-    return {i: (f[i] / t[i]) * 100 for i in ep}
-
-
-def claim(test, reason, sticky=False, propagate=False):
-    '''Claims a given test with a given reason
-
-    :param test: a dict test representation (need to contain the 'url' key)
-
-    :param reason: a string - reason
-
-    :param sticky: whether to make the claim sticky (False by default)
-    '''
-    logging.info('claiming {0} with reason: {1}'.format(test["className"]+"::"+test["name"], reason))
-    claim_req = requests.post(
-        u'{0}/claim/claim'.format(test['url']),
-        auth=requests.auth.HTTPBasicAuth(
-            config['usr'],
-            config['pwd']
-        ),
-        data={u'json': u'{{"assignee": "", "reason": "{0}", "sticky": {1}, "propagateToFollowingBuilds": {2}}}'.format(reason, sticky, propagate)},
-        headers=headers,
-        allow_redirects=False,
-        verify=False
-    )
-    # fixme: do a request result verification
-    test['testActions'][0]['reason'] = reason
-    return(claim_req)
-
-
-def rule_matches(data, rule, indentation=0):
-    """
-    Returns True id data matches to rule, orhervise returns False
-    """
-    logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, data, rule, indentation))
-    if 'field' in rule and 'pattern' in rule:
-        # This is simple rule, we can just check regexp against given field and we are done
-        assert rule['field'] in data
-        out = re.search(rule['pattern'], data[rule['field']]) is not None
-        logging.debug("%s=> %s" % (" "*indentation, out))
+    def get_failed(self):
+        """
+        Return only failed results
+        """
+        out = self.copy()
+        out.data = [i for i in self.data if i.get('status') in self.FAIL_STATUSES]
         return out
-    elif 'AND' in rule:
-        # We need to check if all sub-rules in list of rules rule['AND'] matches
-        out = None
-        for r in rule['AND']:
-            r_out = rule_matches(data, r, indentation+4)
-            out = r_out if out is None else out and r_out
-            if not out:
-                break
+
+    def get_claimed(self):
+        """
+        Only return failed results which do not have claim/waiver
+        """
+        out = self.copy()
+        out.data = [i for i in self.data if i.get('status') in self.FAIL_STATUSES and i['testActions'][0]['reason']]
         return out
-    elif 'OR' in rule:
-        # We need to check if at least one sub-rule in list of rules rule['OR'] matches
-        for r in rule['OR']:
-            if rule_matches(data, r, indentation+4):
-                return True
-        return False
-    else:
-        raise Exception('Rule %s not formatted correctly' % rule)
+
+    def get_unclaimed(self):
+        """
+        Only return results which do not have claim/waiver
+        """
+        out = self.copy()
+        out.data = [i for i in self.data if i.get('status') in self.FAIL_STATUSES and not i['testActions'][0]['reason']]
+        return out
 
 
-def claim_by_rules(fails, rules, dryrun=False):
-    for rule in rules:
-        for fail in [i for i in fails if rule_matches(i, rule)]:
-            logging.info(u'{0} matching pattern: {1} url: {2}'.format(fail['name'], rule['reason'], fail['url']))
-            if not dryrun:
-                claim(fail, rule['reason'])
+class Rules(collections.UserList):
+
+    def __init__(self):
+        with open('kb.json', 'r') as fp:
+            self.data = json.loads(fp.read())

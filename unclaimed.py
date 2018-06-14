@@ -1,11 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import claims
 
-reports = claims.fetch_all_reports()
-reports = claims.flatten_reports(reports)
-reports = claims.filter_fails(reports)
-reports = claims.filter_not_claimed(reports)
+config = claims.Config()
+jenkins = claims.Jenkins(config)
+reports = claims.Results(config, jenkins).get_failed().get_unclaimed()
 
 for r in reports:
     print(u'{0} {1} {2}'.format(r['distro'], r['className'], r['name']))

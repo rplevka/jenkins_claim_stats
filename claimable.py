@@ -1,13 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
 import claims
 
-reports = claims.fetch_all_reports()
-reports = claims.flatten_reports(reports)
-reports = claims.filter_fails(reports)
-reports = claims.filter_not_claimed(reports)
+config = claims.Config()
+jenkins = claims.Jenkins(config)
+results = claims.Results(config, jenkins).get_failed().get_unclaimed()
+rules = claims.Rules()
 
-rules = claims.load_rules()
-
-claims.claim_by_rules(reports, rules, dryrun=True)
+results.claim_by_rules(rules, dryrun=False)

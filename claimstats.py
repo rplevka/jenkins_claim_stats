@@ -1,15 +1,16 @@
-#!/usr/bin/env python
-# -*- coding: UTF-8 -*-
+#!/usr/bin/env python3
 
 import claims
 import tabulate
 
-reports = claims.fetch_all_reports()
-reports = claims.flatten_reports(reports)
+config = claims.Config()
+jenkins = claims.Jenkins(config)
+reports = claims.Results(config, jenkins)
+
 stat_all = len(reports)
-reports_fails = claims.filter_fails(reports)
+reports_fails = reports.get_failed()
 stat_failed = len(reports_fails)
-reports_claimed = claims.filter_claimed(reports_fails)
+reports_claimed = reports.get_claimed()
 stat_claimed = len(reports_claimed)
 
 print("\nOverall stats")
@@ -17,7 +18,7 @@ print(tabulate.tabulate(
     [[stat_all, stat_failed, stat_claimed]],
     headers=['all reports', 'failures', 'claimed failures']))
 
-rules = claims.load_rules()
+rules = claims.Rules()
 rules_reasons = [r['reason'] for r in rules]
 reports_per_reason = {'UNKNOWN': stat_failed-stat_claimed}
 reports_per_reason.update({r:0 for r in rules_reasons})
