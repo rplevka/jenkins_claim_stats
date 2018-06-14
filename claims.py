@@ -10,6 +10,7 @@ import requests
 import yaml
 import pickle
 import collections
+import datetime
 
 logging.basicConfig(level=logging.INFO)
 
@@ -57,13 +58,21 @@ class Case(collections.UserDict):
     """
 
     FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
+    LOG_DATE_REGEXP = re.compile('^([0-9]{4}-[01][0-9]-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}) -')
+    LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, data):
         self.data = data
 
+    def __getitem__(self, name):
+        if name in ('start', 'end') and \
+            ('start' not in self.data or 'end' not in self.data):
+            self.load_timings()
+        return self.data[name]
+
     def matches_to_rule(self, rule, indentation=0):
         """
-        Returns True if result matches to rule, orhervise returns False
+        Returns True if result matches to rule, otherwise returns False
         """
         logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, self, rule, indentation))
         if 'field' in rule and 'pattern' in rule:
@@ -122,6 +131,35 @@ class Case(collections.UserDict):
 
         self['testActions'][0]['reason'] = reason
         return(claim_req)
+
+    def load_timings(self):
+        log = self['stdout'].split("\n")
+        log_size = len(log)
+        log_used = 0
+        start = None
+        end = None
+        counter = 0
+        while start is None:
+            match = self.LOG_DATE_REGEXP.match(log[counter])
+            if match:
+                start = datetime.datetime.strptime(match.group(1),
+                    self.LOG_DATE_FORMAT)
+                break
+            counter += 1
+        log_used += counter
+        counter = -1
+        while end is None:
+            match = self.LOG_DATE_REGEXP.match(log[counter])
+            if match:
+                end = datetime.datetime.strptime(match.group(1),
+                    self.LOG_DATE_FORMAT)
+                break
+            counter -= 1
+        log_used -= counter
+        assert log_used <= log_size, \
+            "Make sure detected start date is not below end date and vice versa"
+        self['start'] = start
+        self['end'] = end
 
 
 class Report(collections.UserList):
