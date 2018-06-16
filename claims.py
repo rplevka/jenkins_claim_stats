@@ -133,6 +133,8 @@ class Case(collections.UserDict):
         return(claim_req)
 
     def load_timings(self):
+        if self['stdout'] is None:
+            return
         log = self['stdout'].split("\n")
         log_size = len(log)
         log_used = 0
