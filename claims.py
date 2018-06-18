@@ -49,7 +49,83 @@ class Config(collections.UserDict):
         self['headers'] = {crumb['crumbRequestField']: crumb['crumb']}
 
 
-config = Config()
+class ForemanDebug(object):
+
+    def __init__(self, tier, rhel):
+        self._url = "%s/job/%s/%s/artifact/foreman-debug.tar.xz" % (config['url'], config['job'].format(tier, rhel), config['bld'])
+        self._extracted = None
+
+    @property
+    def extracted(self):
+        if self._extracted is None:
+            logging.debug('Going to download %s' % self._url)
+            with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as localfile:
+                logging.debug('Going to save to %s' % localfile.name)
+                self._download_file(localfile, self._url)
+            self._tmpdir = tempfile.TemporaryDirectory()
+            subprocess.call(['tar', '-xf', localfile.name, '--directory', self._tmpdir.name])
+            logging.info('Extracted to %s' % self._tmpdir.name)
+            self._extracted = os.path.join(self._tmpdir.name, 'foreman-debug')
+        return self._extracted
+
+    def _download_file(self, localfile, url):
+        r = requests.get(url, stream=True)
+        for chunk in r.iter_content(chunk_size=1024): 
+            if chunk: # filter out keep-alive new chunks
+                localfile.write(chunk)
+        localfile.close()
+        logging.info('File %s saved to %s' % (url, localfile.name))
+
+
+class ProductionLog(object):
+
+    FILE_ENCODING = 'ISO-8859-1'   # guessed, that wile contains ugly binary mess as well
+    DATE_REGEXP = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ')   # 2018-06-13T07:37:26
+    DATE_FMT = '%Y-%m-%dT%H:%M:%S'   # 2018-06-13T07:37:26
+
+    def __init__(self, tier, rhel):
+        self._foreman_debug = ForemanDebug(tier, rhel)
+        self._log = None
+
+    @property
+    def log(self):
+        if self._log is None:
+            logfile = os.path.join(self._foreman_debug.extracted, 'var', 'log', 'foreman', 'production.log')
+            self._log = []
+            buf = []
+            last = None
+            with open(logfile, 'r', encoding=self.FILE_ENCODING) as fp:
+                for line in fp:
+
+                    # This line starts with date - denotes first line of new log record
+                    if re.search(self.DATE_REGEXP, line):
+
+                        # This is a new log record, so firs save previous one
+                        if len(buf) != 0:
+                            self._log.append({'time': last, 'data': buf})
+                        last = datetime.datetime.strptime(line[:19], self.DATE_FMT)
+                        buf = []
+                        buf.append(re.sub(self.DATE_REGEXP, '', line, count=1))
+
+                    # This line does not start with line - comtains continuation of a log recorder started before
+                    else:
+                        buf.append(line)
+
+                # Save last line
+                if len(buf) != 0:
+                    self._log.append({'time': last, 'data': buf})
+
+            logging.info("File %s parsed into memory and deleted" % logfile)
+        return self._log
+
+    def from_to(self, from_time, to_time):
+        out = []
+        for i in self.log:
+            if from_time <= i['time'] <= to_time:
+                out.append(i)
+            if i['time'] > to_time:
+                break
+        return out
 
 
 class Case(collections.UserDict):
@@ -173,6 +249,13 @@ class Report(collections.UserList):
     RHELS = [6, 7]
 
     def __init__(self):
+        # Initialize production.log instance
+        self.production_log = {}
+        for tier in self.TIERS:
+            self.production_log[tier] = {}
+            for rhel in self.RHELS:
+                self.production_log[tier][rhel] = ProductionLog(tier, rhel)
+        self.production_log = ProductionLog(config['job'], config)
         # If cache is configured, load data from it
         if config['cache']:
             if os.path.isfile(config['cache']):
@@ -192,6 +275,7 @@ class Report(collections.UserList):
                                 config['bld']):
                     report['tier'] = 't{}'.format(i)
                     report['distro'] = 'el{}'.format(j)
+                    report['production.log'] = self.production_log[i][j]
                     self.data.append(Case(report))
 
         if config['cache']:
@@ -236,6 +320,9 @@ class Ruleset(collections.UserList):
         with open('kb.json', 'r') as fp:
             self.data = json.loads(fp.read())
 
+
+# Create shared config file
+config = Config()
 
 def claim_by_rules(report, rules, dryrun=False):
     for rule in rules:

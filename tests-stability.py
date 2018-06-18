@@ -9,7 +9,7 @@ import tabulate
 import csv
 import claims
 
-BUILDS = [14, 13, 12, 10, 9, 8, 7, 6]
+BUILDS = [22, 21, 19, 18, 17, 14, 13, 12, 10, 9, 8, 7, 6]
 matrix = collections.OrderedDict()
 
 
