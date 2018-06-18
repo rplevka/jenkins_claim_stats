@@ -11,6 +11,8 @@ import yaml
 import pickle
 import collections
 import datetime
+import tempfile
+import subprocess
 
 logging.basicConfig(level=logging.INFO)
 
@@ -140,10 +142,18 @@ class Case(collections.UserDict):
     def __init__(self, data):
         self.data = data
 
+    def __contains__(self, name):
+        return name in self.data or name in ('start', 'end', 'production.log')
+
     def __getitem__(self, name):
         if name in ('start', 'end') and \
             ('start' not in self.data or 'end' not in self.data):
             self.load_timings()
+        if name == 'production.log':
+            return "\n".join(
+                ["\n".join(i['data']) for i in
+                    self.data['production.log'].from_to(
+                        self['start'], self['end'])])
         return self.data[name]
 
     def matches_to_rule(self, rule, indentation=0):
@@ -153,10 +163,13 @@ class Case(collections.UserDict):
         logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, self, rule, indentation))
         if 'field' in rule and 'pattern' in rule:
             # This is simple rule, we can just check regexp against given field and we are done
-            assert rule['field'] in self
-            out = re.search(rule['pattern'], self[rule['field']]) is not None
-            logging.debug("%s=> %s" % (" "*indentation, out))
-            return out
+            try:
+                out = re.search(rule['pattern'], self[rule['field']]) is not None
+                logging.debug("%s=> %s" % (" "*indentation, out))
+                return out
+            except KeyError:
+                logging.debug("%s=> Failed to get field %s from case" % (" "*indentation, rule['field']))
+                return None
         elif 'AND' in rule:
             # We need to check if all sub-rules in list of rules rule['AND'] matches
             out = None
@@ -250,12 +263,11 @@ class Report(collections.UserList):
 
     def __init__(self):
         # Initialize production.log instance
-        self.production_log = {}
+        self.production_logs = {}
         for tier in self.TIERS:
-            self.production_log[tier] = {}
+            self.production_logs[tier] = {}
             for rhel in self.RHELS:
-                self.production_log[tier][rhel] = ProductionLog(tier, rhel)
-        self.production_log = ProductionLog(config['job'], config)
+                self.production_logs[tier][rhel] = ProductionLog(tier, rhel)
         # If cache is configured, load data from it
         if config['cache']:
             if os.path.isfile(config['cache']):
@@ -275,7 +287,7 @@ class Report(collections.UserList):
                                 config['bld']):
                     report['tier'] = 't{}'.format(i)
                     report['distro'] = 'el{}'.format(j)
-                    report['production.log'] = self.production_log[i][j]
+                    report['production.log'] = self.production_logs[i][j]
                     self.data.append(Case(report))
 
         if config['cache']:
