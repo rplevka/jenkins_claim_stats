@@ -148,8 +148,17 @@ class ProductionLog(object):
         for i in self.log:
             if from_time <= i['time'] <= to_time:
                 out.append(i)
-            if i['time'] > to_time:
-                break
+            # Do not do following as time is not sequentional in the log (or maybe some workers are off or with different TZ?):
+            # TODO: Fix ordering of the log and uncomment this
+            #
+            # E.g.:
+            #   2018-06-17T17:29:44 [I|dyn|] start terminating clock...
+            #   2018-06-17T21:34:49 [I|app|] Current user: foreman_admin (administrator)
+            #   2018-06-17T21:37:21 [...]
+            #   2018-06-17T17:41:38 [I|app|] Started POST "/katello/api/v2/organizations"...
+            #
+            #if i['time'] > to_time:
+            #    break
         return out
 
 
