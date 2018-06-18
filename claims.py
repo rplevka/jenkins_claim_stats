@@ -13,6 +13,7 @@ import collections
 import datetime
 import tempfile
 import subprocess
+import shutil
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,17 +67,19 @@ class ForemanDebug(object):
                 self._download_file(localfile, self._url)
             self._tmpdir = tempfile.TemporaryDirectory()
             subprocess.call(['tar', '-xf', localfile.name, '--directory', self._tmpdir.name])
-            logging.info('Extracted to %s' % self._tmpdir.name)
+            logging.debug('Extracted to %s' % self._tmpdir.name)
             self._extracted = os.path.join(self._tmpdir.name, 'foreman-debug')
         return self._extracted
 
     def _download_file(self, localfile, url):
         r = requests.get(url, stream=True)
-        for chunk in r.iter_content(chunk_size=1024): 
+        for chunk in r.iter_content(chunk_size=1024):
             if chunk: # filter out keep-alive new chunks
                 localfile.write(chunk)
+        if r.status_code != 200:
+            raise requests.HTTPError("Failed to get foreman-debug %s" % url)
         localfile.close()
-        logging.info('File %s saved to %s' % (url, localfile.name))
+        logging.debug('File %s saved to %s' % (url, localfile.name))
 
 
 class ProductionLog(object):
@@ -86,17 +89,32 @@ class ProductionLog(object):
     DATE_FMT = '%Y-%m-%dT%H:%M:%S'   # 2018-06-13T07:37:26
 
     def __init__(self, tier, rhel):
-        self._foreman_debug = ForemanDebug(tier, rhel)
         self._log = None
+        self._logfile = None
+        self._cache = None
+
+        if 'cache' in config:
+            self._cache = '%s-t%s-el%s-production.log' \
+                % (config['cache'].replace('.pickle', ''), tier, rhel)
+            if self._cache and os.path.isfile(self._cache):
+                self._logfile = self._cache
+                logging.debug("Loading production.log from cached %s" % self._logfile)
+                return None
+            else:
+                logging.debug("Cache for production.log (%s) set, but not available. Will create it if we have a chance" % self._cache)
+
+        self._foreman_debug = ForemanDebug(tier, rhel)
 
     @property
     def log(self):
         if self._log is None:
-            logfile = os.path.join(self._foreman_debug.extracted, 'var', 'log', 'foreman', 'production.log')
+            if self._logfile is None:
+                self._logfile = os.path.join(self._foreman_debug.extracted,
+                    'var', 'log', 'foreman', 'production.log')
             self._log = []
             buf = []
             last = None
-            with open(logfile, 'r', encoding=self.FILE_ENCODING) as fp:
+            with open(self._logfile, 'r', encoding=self.FILE_ENCODING) as fp:
                 for line in fp:
 
                     # This line starts with date - denotes first line of new log record
@@ -117,7 +135,12 @@ class ProductionLog(object):
                 if len(buf) != 0:
                     self._log.append({'time': last, 'data': buf})
 
-            logging.info("File %s parsed into memory and deleted" % logfile)
+            # Cache file we have downloaded
+            if self._cache and not os.path.isfile(self._cache):
+                logging.debug("Caching production.log %s to %s" % (self._logfile, self._cache))
+                shutil.copyfile(self._logfile, self._cache)
+
+            logging.debug("File %s parsed into memory and deleted" % self._logfile)
         return self._log
 
     def from_to(self, from_time, to_time):
@@ -150,9 +173,9 @@ class Case(collections.UserDict):
             ('start' not in self.data or 'end' not in self.data):
             self.load_timings()
         if name == 'production.log':
-            return "\n".join(
+            self['production.log'] = "\n".join(
                 ["\n".join(i['data']) for i in
-                    self.data['production.log'].from_to(
+                    self.data['OBJECT:production.log'].from_to(
                         self['start'], self['end'])])
         return self.data[name]
 
@@ -287,7 +310,7 @@ class Report(collections.UserList):
                                 config['bld']):
                     report['tier'] = 't{}'.format(i)
                     report['distro'] = 'el{}'.format(j)
-                    report['production.log'] = self.production_logs[i][j]
+                    report['OBJECT:production.log'] = self.production_logs[i][j]
                     self.data.append(Case(report))
 
         if config['cache']:
