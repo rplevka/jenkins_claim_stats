@@ -192,11 +192,14 @@ class Case(collections.UserDict):
         """
         Returns True if result matches to rule, otherwise returns False
         """
-        logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, self, rule, indentation))
+        logging.debug("%srule_matches(%s, %s, %s)" % (" "*indentation, self['name'], rule, indentation))
         if 'field' in rule and 'pattern' in rule:
             # This is simple rule, we can just check regexp against given field and we are done
             try:
-                out = re.search(rule['pattern'], self[rule['field']]) is not None
+                data = self[rule['field']]
+                if data is None:
+                    data = ''
+                out = re.search(rule['pattern'], data) is not None
                 logging.debug("%s=> %s" % (" "*indentation, out))
                 return out
             except KeyError:
