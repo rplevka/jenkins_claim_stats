@@ -18,6 +18,9 @@ import shutil
 logging.basicConfig(level=logging.INFO)
 
 class Config(collections.UserDict):
+
+    LATEST = 'latest'   # how do we call latest job group in the config?
+
     def __init__(self):
         with open("config.yaml", "r") as file:
             self.data = yaml.load(file)
@@ -33,6 +36,15 @@ class Config(collections.UserDict):
         self['pull_params'] = {
             u'tree': u'suites[cases[className,duration,name,status,stdout,errorDetails,errorStackTrace,testActions[reason]]]{0}'
         }
+
+    def get_builds(self, job_group=''):
+        if job_group == '':
+            job_group = self.LATEST
+        out = collections.OrderedDict()
+        for job in self.data['job_groups'][job_group]['jobs']:
+            key = self.data['job_groups'][job_group]['template'].format(**job)
+            out[key] = job
+        return out
 
     def init_headers(self):
         requests.packages.urllib3.disable_warnings()
@@ -293,16 +305,12 @@ class Report(collections.UserList):
     Report is a list of Cases (i.e. test results)
     """
 
-    TIERS = [1, 2, 3, 4]
-    RHELS = [6, 7]
+    def __init__(self, job_group=''):
+        # If job group is not specified, we want latest one
+        if job_group == '':
+            job_group = config.LATEST
+        self.job_group = job_group
 
-    def __init__(self):
-        # Initialize production.log instance
-        self.production_logs = {}
-        for tier in self.TIERS:
-            self.production_logs[tier] = {}
-            for rhel in self.RHELS:
-                self.production_logs[tier][rhel] = ProductionLog(tier, rhel)
         # If cache is configured, load data from it
         if config['cache']:
             if os.path.isfile(config['cache']):
@@ -314,16 +322,18 @@ class Report(collections.UserList):
                 logging.debug("Cache set to '{0}' but that file does not exist, creating one".format(
                     config['cache']))
 
+        # Load the actual data
         self.data = []
-        for i in self.TIERS:
-            for j in self.RHELS:
-                for report in self.pull_reports(
-                                config['job'].format(i, j),
-                                config['bld']):
-                    report['tier'] = 't{}'.format(i)
-                    report['distro'] = 'el{}'.format(j)
-                    report['OBJECT:production.log'] = self.production_logs[i][j]
-                    self.data.append(Case(report))
+        for name, meta in config.get_builds(self.job_group).items:
+            build = meta['build']
+            rhel = meta['rhel']
+            tier = meta['tier']
+            production_log = ProductionLog(tier, rhel)   # FIXME should we provide build as well?
+            for report in self.pull_reports(name, build):
+                report['tier'] = tier
+                report['distro'] = rhel
+                report['OBJECT:production.log'] = production_log
+                self.data.append(Case(report))
 
         if config['cache']:
             pickle.dump(self.data, open(config['cache'], 'wb'))

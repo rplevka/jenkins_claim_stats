@@ -1,5 +1,19 @@
 usr: jenkins_username
 pwd: jenkins_password
 url: https://jenkins.url
-job: automation-6.2-tier{0}-rhel{1}
-bld: lastCompletedBuild
+job_groups:
+    latest:
+        template: automation-6.4-tier{tier}-rhel{rhel}
+        jobs:
+            - build: lastCompletedBuild
+              rhel: 7
+              tier: 1
+            - build: lastCompletedBuild
+              rhel: 7
+              tier: 2
+            - build: lastCompletedBuild
+              rhel: 7
+              tier: 3
+            - build: lastCompletedBuild
+              rhel: 7
+              tier: 4
