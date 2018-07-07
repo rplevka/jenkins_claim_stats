@@ -66,8 +66,8 @@ class Config(collections.UserDict):
 
 class ForemanDebug(object):
 
-    def __init__(self, tier, rhel):
-        self._url = "%s/job/%s/%s/artifact/foreman-debug.tar.xz" % (config['url'], config['job'].format(tier, rhel), config['bld'])
+    def __init__(self, job, build):
+        self._url = "%s/job/%s/%s/artifact/foreman-debug.tar.xz" % (config['url'], job, build)
         self._extracted = None
 
     @property
@@ -100,14 +100,14 @@ class ProductionLog(object):
     DATE_REGEXP = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ')   # 2018-06-13T07:37:26
     DATE_FMT = '%Y-%m-%dT%H:%M:%S'   # 2018-06-13T07:37:26
 
-    def __init__(self, tier, rhel):
+    def __init__(self, job, build):
         self._log = None
         self._logfile = None
         self._cache = None
 
         if 'cache' in config:
             self._cache = '%s-t%s-el%s-production.log' \
-                % (config['cache'].replace('.pickle', ''), tier, rhel)
+                % (config['cache'].replace('.pickle', ''), job, build)
             if self._cache and os.path.isfile(self._cache):
                 self._logfile = self._cache
                 logging.debug("Loading production.log from cached %s" % self._logfile)
@@ -115,7 +115,7 @@ class ProductionLog(object):
             else:
                 logging.debug("Cache for production.log (%s) set, but not available. Will create it if we have a chance" % self._cache)
 
-        self._foreman_debug = ForemanDebug(tier, rhel)
+        self._foreman_debug = ForemanDebug(job, build)
 
     @property
     def log(self):
@@ -328,7 +328,7 @@ class Report(collections.UserList):
             build = meta['build']
             rhel = meta['rhel']
             tier = meta['tier']
-            production_log = ProductionLog(tier, rhel)   # FIXME should we provide build as well?
+            production_log = ProductionLog(name, build)
             for report in self.pull_reports(name, build):
                 report['tier'] = tier
                 report['distro'] = rhel
