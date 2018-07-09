@@ -324,7 +324,7 @@ class Report(collections.UserList):
 
         # Load the actual data
         self.data = []
-        for name, meta in config.get_builds(self.job_group).items:
+        for name, meta in config.get_builds(self.job_group).items():
             build = meta['build']
             rhel = meta['rhel']
             tier = meta['tier']

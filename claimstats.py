@@ -18,14 +18,14 @@ print(tabulate.tabulate(
     floatfmt=".0f"))
 
 stats = []
-for t in ["t%s" % i for i in claims.Report.TIERS]:
+for t in [i['tier'] for i in claims.config.get_builds().values()]:
     filtered = [r for r in reports if r['tier'] == t]
-    stat_all = len(filtered)
-    reports_fails = [i for i in filtered if i['status'] in claims.Case.FAIL_STATUSES]
-    stat_failed = len(reports_fails)
-    reports_claimed = [i for i in reports_fails if i['testActions'][0].get('reason')]
-    stat_claimed = len(reports_claimed)
-    stats.append([t, stat_all, stat_failed, stat_failed/stat_all*100, stat_claimed, stat_claimed/stat_failed*100])
+    stat_all_tiered = len(filtered)
+    reports_fails_tiered = [i for i in filtered if i['status'] in claims.Case.FAIL_STATUSES]
+    stat_failed_tiered = len(reports_fails_tiered)
+    reports_claimed_tiered = [i for i in reports_fails_tiered if i['testActions'][0].get('reason')]
+    stat_claimed_tiered = len(reports_claimed_tiered)
+    stats.append(["t%s" % t, stat_all_tiered, stat_failed_tiered, stat_failed_tiered/stat_all_tiered*100, stat_claimed_tiered, stat_claimed_tiered/stat_failed_tiered*100])
 
 print("\nStats per tier")
 print(tabulate.tabulate(

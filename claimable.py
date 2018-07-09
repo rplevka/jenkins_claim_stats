@@ -11,5 +11,5 @@ rules = claims.Ruleset()
 
 claims.claim_by_rules(report, rules, dryrun=True)
 
-#for case in [i for i in report if i['status'] in claims.Case.FAIL_STATUSES]:
-#    print(case['url'])
+for case in [i for i in report if i['status'] in claims.Case.FAIL_STATUSES]:
+    print(case['url'])
