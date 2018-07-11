@@ -24,7 +24,7 @@ class ClaimsCli(object):
     @property
     def results(self):
         if not self._results:
-            self._results = lib.Report()
+            self._results = lib.Report(self.job_group)
             if self.grep_results:
                 self._results = [r for r in self._results if re.search(self.grep_results, "%s.%s" % (r['className'], r['name']))]
         return self._results
