@@ -6,6 +6,7 @@ import sys
 import json
 import logging
 import re
+import urllib3
 import requests
 import yaml
 import pickle
@@ -15,7 +16,38 @@ import tempfile
 import subprocess
 import shutil
 
+CACHEDIR = '.cache/'
+
 logging.basicConfig(level=logging.INFO)
+
+def request_get(url, params=None, expected_codes=[200], cached=True):
+    # If available, read it from cache
+    if cached and os.path.isfile(cached):
+        with open(cached, 'r') as fp:
+            return fp.read()
+
+    # Get the response from the server
+    urllib3.disable_warnings()
+    response = requests.get(
+        url,
+        auth=requests.auth.HTTPBasicAuth(
+            config['usr'], config['pwd']),
+        params=params,
+        verify=False
+    )
+    if response.status_code not in expected_codes:
+        raise requests.HTTPError("Failed to get %s with %s" % (url, response.status_code))
+    if response.status_code == 404:
+        return []
+
+    # If cache was configured, dump data in there
+    if cached:
+        os.makedirs(os.path.dirname(cached), exist_ok=True)
+        with open(cached, 'w') as fp:
+            fp.write(response.text)
+
+    return response.text
+
 
 class Config(collections.UserDict):
 
@@ -24,12 +56,6 @@ class Config(collections.UserDict):
     def __init__(self):
         with open("config.yaml", "r") as file:
             self.data = yaml.load(file)
-
-        # If cache is configured, save it into configuration
-        if 'DEBUG_CLAIMS_CACHE' in os.environ:
-            self.data['cache'] = os.environ['DEBUG_CLAIMS_CACHE']
-        else:
-            self.data['cache'] = None
 
         # Additional params when talking to Jenkins
         self['headers'] = None
@@ -47,20 +73,9 @@ class Config(collections.UserDict):
         return out
 
     def init_headers(self):
-        requests.packages.urllib3.disable_warnings()
-
-        # Get the Jenkins crumb (csrf protection)
-        crumb_request = requests.get(
-                '{0}/crumbIssuer/api/json'.format(self['url']),
-                auth=requests.auth.HTTPBasicAuth(self['usr'], self['pwd']),
-                verify=False
-            )
-
-        if crumb_request.status_code != 200:
-            raise requests.HTTPError(
-                'Failed to obtain crumb: {0}'.format(crumb_request.reason))
-
-        crumb = json.loads(crumb_request.text)
+        url = '{0}/crumbIssuer/api/json'.format(self['url'])
+        crumb_data = request_get(url, params=None, expected_codes=[200], cached=False)
+        crumb = json.loads(crumb_data)
         self['headers'] = {crumb['crumbRequestField']: crumb['crumb']}
 
 
@@ -302,6 +317,8 @@ class Case(collections.UserDict):
         self['end'] = end
 
 
+
+
 class Report(collections.UserList):
     """
     Report is a list of Cases (i.e. test results)
@@ -312,17 +329,12 @@ class Report(collections.UserList):
         if job_group == '':
             job_group = config.LATEST
         self.job_group = job_group
+        self.cache = os.path.join(CACHEDIR, self.job_group, 'main.pickle')
 
-        # If cache is configured, load data from it
-        if config['cache']:
-            if os.path.isfile(config['cache']):
-                logging.debug("Because cache is set to '{0}', loading data from there".format(
-                    config['cache']))
-                self.data = pickle.load(open(config['cache'], 'rb'))
-                return
-            else:
-                logging.debug("Cache set to '{0}' but that file does not exist, creating one".format(
-                    config['cache']))
+        # Attempt to load data from cache
+        if os.path.isfile(self.cache):
+            self.data = pickle.load(open(self.cache, 'rb'))
+            return
 
         # Load the actual data
         self.data = []
@@ -337,8 +349,8 @@ class Report(collections.UserList):
                 report['OBJECT:production.log'] = production_log
                 self.data.append(Case(report))
 
-        if config['cache']:
-            pickle.dump(self.data, open(config['cache'], 'wb'))
+        # Dump parsed data into cache
+        pickle.dump(self.data, open(self.cache, 'wb'))
 
     def pull_reports(self, job, build):
         """
@@ -346,23 +358,12 @@ class Report(collections.UserList):
         """
         build_url = '{0}/job/{1}/{2}'.format(
             config['url'], job, build)
-
-        logging.debug("Getting {}".format(build_url))
-        bld_req = requests.get(
-            build_url + '/testReport/api/json',
-            auth=requests.auth.HTTPBasicAuth(
-                config['usr'], config['pwd']),
+        build_data = request_get(
+            build_url+'/testReport/api/json',
             params=config['pull_params'],
-            verify=False
-        )
-
-        if bld_req.status_code == 404:
-            return []
-        if bld_req.status_code != 200:
-            raise requests.HTTPError(
-                'Failed to obtain: {0}'.format(bld_req))
-
-        cases = json.loads(bld_req.text)['suites'][0]['cases']
+            expected_codes=[200, 404],
+            cached=os.path.join(CACHEDIR, self.job_group, job, 'main.json'))
+        cases = json.loads(build_data)['suites'][0]['cases']
 
         # Enrich individual reports with URL
         for c in cases:
