@@ -20,9 +20,9 @@ CACHEDIR = '.cache/'
 
 logging.basicConfig(level=logging.INFO)
 
-def request_get(url, params=None, expected_codes=[200], cached=True):
+def request_get(url, params=None, expected_codes=[200], cached=True, stream=False):
     # If available, read it from cache
-    if cached and os.path.isfile(cached):
+    if cached and not stream and os.path.isfile(cached):
         with open(cached, 'r') as fp:
             return fp.read()
 
@@ -35,10 +35,23 @@ def request_get(url, params=None, expected_codes=[200], cached=True):
         params=params,
         verify=False
     )
+
+    # Check we got expected exit code
     if response.status_code not in expected_codes:
         raise requests.HTTPError("Failed to get %s with %s" % (url, response.status_code))
+
+    # If we were streaming file
+    if stream:
+        with open(cached, 'w+b') as fp:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:   # filter out keep-alive new chunks
+                    fp.write(chunk)
+            fp.close()
+        return
+
+    # In some cases 404 just means "we have nothing"
     if response.status_code == 404:
-        return []
+        return ''
 
     # If cache was configured, dump data in there
     if cached:
@@ -81,63 +94,45 @@ class Config(collections.UserDict):
 
 class ForemanDebug(object):
 
-    def __init__(self, job, build):
+    def __init__(self, job_group, job, build):
         self._url = "%s/job/%s/%s/artifact/foreman-debug.tar.xz" % (config['url'], job, build)
         self._extracted = None
 
     @property
     def extracted(self):
         if self._extracted is None:
-            logging.debug('Going to download %s' % self._url)
-            with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as localfile:
-                logging.debug('Going to save to %s' % localfile.name)
-                self._download_file(localfile, self._url)
-            self._tmpdir = tempfile.TemporaryDirectory()
-            subprocess.call(['tar', '-xf', localfile.name, '--directory', self._tmpdir.name])
-            logging.debug('Extracted to %s' % self._tmpdir.name)
-            self._extracted = os.path.join(self._tmpdir.name, 'foreman-debug')
+            fp, fname = tempfile.mkstemp()
+            print(fname)
+            request_get(self._url, cached=fname, stream=True)
+            tmpdir = tempfile.mkdtemp()
+            subprocess.call(['tar', '-xf', fname, '--directory', tmpdir])
+            logging.debug('Extracted to %s' % tmpdir)
+            self._extracted = os.path.join(tmpdir, 'foreman-debug')
         return self._extracted
-
-    def _download_file(self, localfile, url):
-        r = requests.get(url, stream=True)
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk: # filter out keep-alive new chunks
-                localfile.write(chunk)
-        if r.status_code != 200:
-            raise requests.HTTPError("Failed to get foreman-debug %s" % url)
-        localfile.close()
-        logging.debug('File %s saved to %s' % (url, localfile.name))
 
 
 class ProductionLog(object):
 
-    FILE_ENCODING = 'ISO-8859-1'   # guessed, that wile contains ugly binary mess as well
+    FILE_ENCODING = 'ISO-8859-1'   # guessed it only, that file contains ugly binary mess as well
     DATE_REGEXP = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ')   # 2018-06-13T07:37:26
     DATE_FMT = '%Y-%m-%dT%H:%M:%S'   # 2018-06-13T07:37:26
 
-    def __init__(self, job, build):
+    def __init__(self, job_group, job, build):
         self._log = None
-        self._logfile = None
-        self._cache = None
+        self._logfile = os.path.join(CACHEDIR, job_group, job, 'production.log')
+        self._foreman_debug = None
 
-        if 'cache' in config:
-            self._cache = '%s-t%s-el%s-production.log' \
-                % (config['cache'].replace('.pickle', ''), job, build)
-            if self._cache and os.path.isfile(self._cache):
-                self._logfile = self._cache
-                logging.debug("Loading production.log from cached %s" % self._logfile)
-                return None
-            else:
-                logging.debug("Cache for production.log (%s) set, but not available. Will create it if we have a chance" % self._cache)
-
-        self._foreman_debug = ForemanDebug(job, build)
+        # If we do not have logfile downloaded already, we will need foreman-debug
+        if not os.path.isfile(self._logfile):
+            self._foreman_debug = ForemanDebug(job_group, job, build)
 
     @property
     def log(self):
         if self._log is None:
-            if self._logfile is None:
-                self._logfile = os.path.join(self._foreman_debug.extracted,
-                    'var', 'log', 'foreman', 'production.log')
+            if self._foreman_debug is not None:
+                a = os.path.join(self._foreman_debug.extracted,
+                                 'var', 'log', 'foreman', 'production.log')
+                shutil.copy2(a, self._logfile)
             self._log = []
             buf = []
             last = None
@@ -162,12 +157,7 @@ class ProductionLog(object):
                 if len(buf) != 0:
                     self._log.append({'time': last, 'data': buf})
 
-            # Cache file we have downloaded
-            if self._cache and not os.path.isfile(self._cache):
-                logging.debug("Caching production.log %s to %s" % (self._logfile, self._cache))
-                shutil.copyfile(self._logfile, self._cache)
-
-            logging.debug("File %s parsed into memory and deleted" % self._logfile)
+            logging.debug("File %s parsed into memory" % self._logfile)
         return self._log
 
     def from_to(self, from_time, to_time):
@@ -329,11 +319,11 @@ class Report(collections.UserList):
         if job_group == '':
             job_group = config.LATEST
         self.job_group = job_group
-        self.cache = os.path.join(CACHEDIR, self.job_group, 'main.pickle')
+        self._cache = os.path.join(CACHEDIR, self.job_group, 'main.pickle')
 
         # Attempt to load data from cache
-        if os.path.isfile(self.cache):
-            self.data = pickle.load(open(self.cache, 'rb'))
+        if os.path.isfile(self._cache):
+            self.data = pickle.load(open(self._cache, 'rb'))
             return
 
         # Load the actual data
@@ -342,7 +332,7 @@ class Report(collections.UserList):
             build = meta['build']
             rhel = meta['rhel']
             tier = meta['tier']
-            production_log = ProductionLog(name, build)
+            production_log = ProductionLog(self.job_group, name, build)
             for report in self.pull_reports(name, build):
                 report['tier'] = tier
                 report['distro'] = rhel
@@ -350,7 +340,7 @@ class Report(collections.UserList):
                 self.data.append(Case(report))
 
         # Dump parsed data into cache
-        pickle.dump(self.data, open(self.cache, 'wb'))
+        pickle.dump(self.data, open(self._cache, 'wb'))
 
     def pull_reports(self, job, build):
         """
