@@ -44,6 +44,32 @@ class ClaimsCli(object):
             [[r['testName']] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
             headers=['unclaimed test name'], tablefmt=self.output))
 
+    def show(self, test_class, test_name):
+        MAXWIDTH = 100
+        FIELDS_EXTRA = ['start', 'end', 'production.log']
+        FIELDS_SKIP = ['OBJECT:production.log']
+        data = []
+        for r in self.results:
+            if r['className'] == test_class and r['name'] == test_name:
+                for k in sorted(r.keys()) + FIELDS_EXTRA:
+                    if k in FIELDS_SKIP:
+                        continue
+                    v = r[k]
+                    print("%s:" % k)
+                    if isinstance(v, str):
+                        for row in v.split("\n"):
+                            if k == 'url':
+                                print(" "*len(k), row)
+                            if k == 'production.log' and len(row) == 0:
+                                continue
+                            width = len(row)
+                            printed = MAXWIDTH
+                            print(" "*len(k), row[0:MAXWIDTH])
+                            while printed < width:
+                                print(" "*(len(k)+4), row[printed:printed+MAXWIDTH-4])
+                                printed += len(row[printed:printed+MAXWIDTH-4])
+                break
+
     def handle_args(self):
         parser = argparse.ArgumentParser(description='Manipulate Jenkins claims with grace')
 
@@ -123,6 +149,14 @@ class ClaimsCli(object):
         # Show unclaimed
         if args.show_unclaimed:
             self.show_unclaimed()
+            return 0
+
+        # Show test details
+        if args.show:
+            self.grep_results = None   # to be sure we will not be missing the test because of filtering
+            class_name = '.'.join(args.show.split('.')[:-1])
+            name = args.show.split('.')[-1]
+            self.show(class_name, name)
             return 0
 
         return 0
