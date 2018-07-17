@@ -29,6 +29,14 @@ class ClaimsCli(object):
                 self._results = [r for r in self._results if re.search(self.grep_results, "%s.%s" % (r['className'], r['name']))]
         return self._results
 
+    @property
+    def rules(self):
+        if not self._rules:
+            self._rules = lib.Ruleset()
+            if self.grep_rules:
+                self._rules = [r for r in self._rules if re.search(self.grep_rules, r['reason'])]
+        return self._rules
+
     def show_failed(self):
         print(tabulate.tabulate(
             [[r['testName']] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES],
@@ -69,6 +77,89 @@ class ClaimsCli(object):
                                 print(" "*(len(k)+4), row[printed:printed+MAXWIDTH-4])
                                 printed += len(row[printed:printed+MAXWIDTH-4])
                 break
+
+    def claim(self):
+        pass
+
+    def stats(self):
+        def _perc(perc_from, perc_sum):
+            """Just a shortcur to safely count percentage"""
+            try:
+                return float(perc_from)/perc_sum*100
+            except ZeroDivisionError:
+                return None
+
+        stat_all = len(self.results)
+        reports_fails = [i for i in self.results if i['status'] in lib.Case.FAIL_STATUSES]
+        stat_failed = len(reports_fails)
+        reports_claimed = [i for i in reports_fails if i['testActions'][0].get('reason')]
+        stat_claimed = len(reports_claimed)
+
+        stats_all = ['TOTAL', stat_all, stat_failed, _perc(stat_failed, stat_all), stat_claimed, _perc(stat_claimed, stat_failed)]
+
+        stats = []
+        for t in [i['tier'] for i in lib.config.get_builds().values()]:
+            filtered = [r for r in self.results if r['tier'] == t]
+            stat_all_tiered = len(filtered)
+            reports_fails_tiered = [i for i in filtered if i['status'] in lib.Case.FAIL_STATUSES]
+            stat_failed_tiered = len(reports_fails_tiered)
+            reports_claimed_tiered = [i for i in reports_fails_tiered if i['testActions'][0].get('reason')]
+            stat_claimed_tiered = len(reports_claimed_tiered)
+            stats.append(["t%s" % t, stat_all_tiered, stat_failed_tiered, _perc(stat_failed_tiered, stat_all_tiered), stat_claimed_tiered, _perc(stat_claimed_tiered, stat_failed_tiered)])
+
+        print("\nOverall stats")
+        print(tabulate.tabulate(
+            stats + [stats_all],
+            headers=['tier', 'all reports', 'failures', 'failures [%]', 'claimed failures', 'claimed failures [%]'],
+            floatfmt=".01f"))
+
+        reports_per_method = {}
+        for report in self.results:
+            method = report['className'].split('.')[2]
+            if method not in reports_per_method:
+                reports_per_method[method] = {'all': 0, 'failed': 0}
+            reports_per_method[method]['all'] += 1
+            if report in reports_fails:
+                reports_per_method[method]['failed'] += 1
+
+        print("\nHow many failures are there per endpoint")
+        print(tabulate.tabulate(
+            sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all'])) for c,r in reports_per_method.items()],
+                key=lambda x: x[3], reverse=True),
+            headers=['method', 'number of reports', 'number of failures', 'failures ratio'],
+            floatfmt=".1f"))
+
+        rules_reasons = [r['reason'] for r in self.rules]
+        reports_per_reason = {'UNKNOWN': stat_failed-stat_claimed}
+        reports_per_reason.update({r:0 for r in rules_reasons})
+        for report in reports_claimed:
+            reason = report['testActions'][0]['reason']
+            if reason not in reports_per_reason:
+                reports_per_reason[reason] = 0
+            reports_per_reason[reason] += 1
+
+        print("\nHow various reasons for claims are used")
+        reports_per_reason = sorted(reports_per_reason.items(), key=lambda x: x[1], reverse=True)
+        reports_per_reason = [(r, c, r in rules_reasons) for r, c in reports_per_reason]
+        print(tabulate.tabulate(
+            reports_per_reason,
+            headers=['claim reason', 'claimed times', 'claiming automated?']))
+
+        reports_per_class = {}
+        for report in self.results:
+            class_name = report['className']
+            if class_name not in reports_per_class:
+                reports_per_class[class_name] = {'all': 0, 'failed': 0}
+            reports_per_class[class_name]['all'] += 1
+            if report in reports_fails:
+                reports_per_class[class_name]['failed'] += 1
+
+        print("\nHow many failures are there per class")
+        print(tabulate.tabulate(
+            sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all'])) for c,r in reports_per_class.items()],
+                key=lambda x: x[3], reverse=True),
+            headers=['class name', 'number of reports', 'number of failures', 'failures ratio'],
+            floatfmt=".1f"))
 
     def handle_args(self):
         parser = argparse.ArgumentParser(description='Manipulate Jenkins claims with grace')
@@ -139,25 +230,29 @@ class ClaimsCli(object):
         # Show failed
         if args.show_failed:
             self.show_failed()
-            return 0
 
         # Show claimed
-        if args.show_claimed:
+        elif args.show_claimed:
             self.show_claimed()
-            return 0
 
         # Show unclaimed
-        if args.show_unclaimed:
+        elif args.show_unclaimed:
             self.show_unclaimed()
-            return 0
 
         # Show test details
-        if args.show:
+        elif args.show:
             self.grep_results = None   # to be sure we will not be missing the test because of filtering
             class_name = '.'.join(args.show.split('.')[:-1])
             name = args.show.split('.')[-1]
             self.show(class_name, name)
-            return 0
+
+        # Do a claim work
+        elif args.claim:
+            pass
+
+        # Show statistics
+        elif args.stats:
+            self.stats()
 
         return 0
 
