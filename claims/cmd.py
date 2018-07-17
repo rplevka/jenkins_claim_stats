@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import sys
 import logging
 import argparse
 import re
 import tabulate
+import csv
 
 import lib
 
 logging.basicConfig(level=logging.INFO)
+
 
 class ClaimsCli(object):
 
@@ -37,20 +40,34 @@ class ClaimsCli(object):
                 self._rules = [r for r in self._rules if re.search(self.grep_rules, r['reason'])]
         return self._rules
 
+    def _table(self, data, headers=[], tablefmt=None, floatfmt=None):
+        if self.output == 'csv':
+            writer = csv.writer(sys.stdout)
+            if headers:
+                writer.writerow(headers)
+            for row in data:
+                writer.writerow(row)
+        else:
+            print(tabulate.tabulate(
+                data,
+                headers=headers,
+                floatfmt=floatfmt,
+                tablefmt=self.output))
+
     def show_failed(self):
-        print(tabulate.tabulate(
+        self._table(
             [[r['testName']] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES],
-            headers=['failed test name'], tablefmt=self.output))
+            headers=['failed test name'], tablefmt=self.output)
 
     def show_claimed(self):
-        print(tabulate.tabulate(
+        self._table(
             [[r['testName'], r['testActions'][0].get('reason')] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES and r['testActions'][0].get('reason')],
-            headers=['claimed test name', 'claim reason'], tablefmt=self.output))
+            headers=['claimed test name', 'claim reason'], tablefmt=self.output)
 
     def show_unclaimed(self):
-        print(tabulate.tabulate(
+        self._table(
             [[r['testName']] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
-            headers=['unclaimed test name'], tablefmt=self.output))
+            headers=['unclaimed test name'], tablefmt=self.output)
 
     def show(self, test_class, test_name):
         MAXWIDTH = 100
@@ -108,10 +125,11 @@ class ClaimsCli(object):
             stats.append(["t%s" % t, stat_all_tiered, stat_failed_tiered, _perc(stat_failed_tiered, stat_all_tiered), stat_claimed_tiered, _perc(stat_claimed_tiered, stat_failed_tiered)])
 
         print("\nOverall stats")
-        print(tabulate.tabulate(
+        self._table(
             stats + [stats_all],
             headers=['tier', 'all reports', 'failures', 'failures [%]', 'claimed failures', 'claimed failures [%]'],
-            floatfmt=".01f"))
+            floatfmt=".01f",
+            tablefmt=self.output)
 
         reports_per_method = {}
         for report in self.results:
@@ -123,11 +141,12 @@ class ClaimsCli(object):
                 reports_per_method[method]['failed'] += 1
 
         print("\nHow many failures are there per endpoint")
-        print(tabulate.tabulate(
+        self._table(
             sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all'])) for c,r in reports_per_method.items()],
                 key=lambda x: x[3], reverse=True),
             headers=['method', 'number of reports', 'number of failures', 'failures ratio'],
-            floatfmt=".1f"))
+            floatfmt=".1f",
+            tablefmt=self.output)
 
         rules_reasons = [r['reason'] for r in self.rules]
         reports_per_reason = {'UNKNOWN': stat_failed-stat_claimed}
@@ -141,9 +160,10 @@ class ClaimsCli(object):
         print("\nHow various reasons for claims are used")
         reports_per_reason = sorted(reports_per_reason.items(), key=lambda x: x[1], reverse=True)
         reports_per_reason = [(r, c, r in rules_reasons) for r, c in reports_per_reason]
-        print(tabulate.tabulate(
+        self._table(
             reports_per_reason,
-            headers=['claim reason', 'claimed times', 'claiming automated?']))
+            headers=['claim reason', 'claimed times', 'claiming automated?'],
+            tablefmt=self.output)
 
         reports_per_class = {}
         for report in self.results:
@@ -155,11 +175,12 @@ class ClaimsCli(object):
                 reports_per_class[class_name]['failed'] += 1
 
         print("\nHow many failures are there per class")
-        print(tabulate.tabulate(
+        self._table(
             sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all'])) for c,r in reports_per_class.items()],
                 key=lambda x: x[3], reverse=True),
             headers=['class name', 'number of reports', 'number of failures', 'failures ratio'],
-            floatfmt=".1f"))
+            floatfmt=".1f",
+            tablefmt=self.output)
 
     def handle_args(self):
         parser = argparse.ArgumentParser(description='Manipulate Jenkins claims with grace')
