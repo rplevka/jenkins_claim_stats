@@ -44,7 +44,7 @@ class ClaimsCli(object):
                 self._rules = [r for r in self._rules if re.search(self.grep_rules, r['reason'])]
         return self._rules
 
-    def _table(self, data, headers=[], tablefmt=None, floatfmt=None):
+    def _table(self, data, headers=[], tablefmt=None, floatfmt='%.01f'):
         if self.output == 'csv':
             writer = csv.writer(sys.stdout)
             if headers:
