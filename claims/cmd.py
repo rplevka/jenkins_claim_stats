@@ -7,6 +7,8 @@ import argparse
 import re
 import tabulate
 import csv
+import collections
+import statistics
 
 import lib
 
@@ -27,10 +29,12 @@ class ClaimsCli(object):
     @property
     def results(self):
         if not self._results:
-            self._results = lib.Report(self.job_group)
+            self._results = {}
+        if self.job_group not in self._results:
+            self._results[self.job_group] = lib.Report(self.job_group)
             if self.grep_results:
-                self._results = [r for r in self._results if re.search(self.grep_results, "%s.%s" % (r['className'], r['name']))]
-        return self._results
+                self._results[self.job_group] = [r for r in self._results[self.job_group] if re.search(self.grep_results, "%s.%s" % (r['className'], r['name']))]
+        return self._results[self.job_group]
 
     @property
     def rules(self):
@@ -182,6 +186,62 @@ class ClaimsCli(object):
             floatfmt=".1f",
             tablefmt=self.output)
 
+    def history(self):
+
+        def sanitize_state(state):
+            if state == 'REGRESSION':
+                state = 'FAILED'
+            if state == 'FIXED':
+                state = 'PASSED'
+            if state == 'PASSED':
+                return 0
+            if state == 'FAILED':
+                return 1
+            raise KeyError("Do not know how to handle state %s" % state)
+
+        matrix = collections.OrderedDict()
+
+        # Load tests results
+        job_groups = lib.config['job_groups'].keys()
+        for job_group in job_groups:
+            logging.info('Loading job group %s' % job_group)
+            self.job_group = job_group
+            report = self.results
+            for r in report:
+                t = "%s::%s@%s" % (r['className'], r['name'], r['distro'])
+                if t not in matrix:
+                    matrix[t] = dict.fromkeys(job_group)
+                try:
+                    state = sanitize_state(r['status'])
+                except KeyError:
+                    continue   # e.g. state "SKIPPED"
+                matrix[t][job_group] = state
+
+        # Count statistical measure of the results
+        for k,v in matrix.items():
+            try:
+                stdev = statistics.pstdev([i for i in v.values() if i is not None])
+            except statistics.StatisticsError:
+                stdev = None
+            v['stdev'] = stdev
+
+        print("Legend:\n    0 ... PASSED or FIXED\n    1 ... FAILED or REGRESSION\n    Population standard deviation, 0 is best (stable), 0.5 is worst (unstable)")
+        headers = ['test'] + list(job_groups) + ['pstdev (all)']
+        matrix_flat = []
+        for k,v in matrix.items():
+            v_list = []
+            for job_group in job_groups:
+                if job_group in v:
+                    v_list.append(v[job_group])
+                else:
+                    v_list.append(None)
+            matrix_flat.append([k]+v_list+[v['stdev']])
+        self._table(
+            matrix_flat,
+            headers=headers,
+            floatfmt=".3f"
+        )
+
     def handle_args(self):
         parser = argparse.ArgumentParser(description='Manipulate Jenkins claims with grace')
 
@@ -274,6 +334,10 @@ class ClaimsCli(object):
         # Show statistics
         elif args.stats:
             self.stats()
+
+        # Show tests history
+        elif args.history:
+            self.history()
 
         return 0
 
