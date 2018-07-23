@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import os.path
 import sys
 import logging
 import argparse
@@ -9,6 +10,7 @@ import tabulate
 import csv
 import collections
 import statistics
+import shutil
 
 import lib
 
@@ -57,6 +59,14 @@ class ClaimsCli(object):
                 headers=headers,
                 floatfmt=floatfmt,
                 tablefmt=self.output))
+
+    def clean_cache(self):
+        d = os.path.join(lib.CACHEDIR, self.job_group)
+        try:
+            shutil.rmtree(d)
+            logging.info("Removed %s" % d)
+        except FileNotFoundError:
+            pass
 
     def show_failed(self):
         self._table(
@@ -256,7 +266,7 @@ class ClaimsCli(object):
 
         # Actions
         parser.add_argument('--clean-cache', action='store_true',
-                            help='Cleans cache for latest job group. If you want to clean cache for older job group, use rm in .cache directory')
+                            help='Cleans cache for job group provided by "--job-group" option (default: latest)')
         parser.add_argument('--show-failed', action='store_true',
                             help='Show all failed tests')
         parser.add_argument('--show-claimed', action='store_true',
@@ -316,6 +326,10 @@ class ClaimsCli(object):
         logging.debug("Using output type %s" % self.output)
 
         # Actions
+
+        # Clean cache
+        if args.clean_cache:
+            self.clean_cache()
 
         # Show failed
         if args.show_failed:
