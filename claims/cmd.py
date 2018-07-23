@@ -138,7 +138,7 @@ class ClaimsCli(object):
         stats_all = ['TOTAL', stat_all, stat_failed, _perc(stat_failed, stat_all), stat_claimed, _perc(stat_claimed, stat_failed)]
 
         stats = []
-        for t in [i['tier'] for i in lib.config.get_builds().values()]:
+        for t in [i['tier'] for i in lib.config.get_builds(self.job_group).values()]:
             filtered = [r for r in self.results if r['tier'] == t]
             stat_all_tiered = len(filtered)
             reports_fails_tiered = [i for i in filtered if i['status'] in lib.Case.FAIL_STATUSES]
