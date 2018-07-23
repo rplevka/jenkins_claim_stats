@@ -375,9 +375,12 @@ class Ruleset(collections.UserList):
 config = Config()
 
 def claim_by_rules(report, rules, dryrun=False):
+    claimed = []
     for rule in rules:
         for case in [i for i in report if i['status'] in Case.FAIL_STATUSES and not i['testActions'][0].get('reason')]:
             if case.matches_to_rule(rule):
-                logging.info(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
+                logging.debug(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
                 if not dryrun:
                     case.push_claim(rule['reason'])
+                claimed.append(case)
+    return claimed

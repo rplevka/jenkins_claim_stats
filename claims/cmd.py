@@ -73,6 +73,12 @@ class ClaimsCli(object):
             [[r['testName']] for r in self.results if r['status'] in lib.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
             headers=['unclaimed test name'], tablefmt=self.output)
 
+    def show_claimable(self):
+        claimable = lib.claim_by_rules(self.results, self.rules, dryrun=True)
+        self._table(
+            [[r['testName']] for r in claimable],
+            headers=['claimable test name'], tablefmt=self.output)
+
     def show(self, test_class, test_name):
         MAXWIDTH = 100
         FIELDS_EXTRA = ['start', 'end', 'production.log']
@@ -100,7 +106,10 @@ class ClaimsCli(object):
                 break
 
     def claim(self):
-        pass
+        claimed = lib.claim_by_rules(self.results, self.rules, dryrun=False)
+        self._table(
+            [[r['testName']] for r in claimed],
+            headers=['claimed test name'], tablefmt=self.output)
 
     def stats(self):
         def _perc(perc_from, perc_sum):
@@ -320,6 +329,10 @@ class ClaimsCli(object):
         elif args.show_unclaimed:
             self.show_unclaimed()
 
+        # Show claimable
+        elif args.show_claimable:
+            self.show_claimable()
+
         # Show test details
         elif args.show:
             self.grep_results = None   # to be sure we will not be missing the test because of filtering
@@ -329,7 +342,7 @@ class ClaimsCli(object):
 
         # Do a claim work
         elif args.claim:
-            pass
+            self.claim()
 
         # Show statistics
         elif args.stats:
