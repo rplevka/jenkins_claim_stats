@@ -158,16 +158,18 @@ class ClaimsCli(object):
         for report in self.results:
             method = report['className'].split('.')[2]
             if method not in reports_per_method:
-                reports_per_method[method] = {'all': 0, 'failed': 0}
+                reports_per_method[method] = {'all': 0, 'failed': 0, 'claimed': 0}
             reports_per_method[method]['all'] += 1
             if report in reports_fails:
                 reports_per_method[method]['failed'] += 1
+            if report in reports_claimed:
+                reports_per_method[method]['claimed'] += 1
 
         print("\nHow many failures are there per endpoint")
         self._table(
-            sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all'])) for c,r in reports_per_method.items()],
-                key=lambda x: x[3], reverse=True),
-            headers=['method', 'number of reports', 'number of failures', 'failures ratio'],
+            sorted([(c, r['all'], r['failed'], _perc(r['failed'], r['all']), r['claimed'], _perc(r['claimed'], r['failed'])) for c,r in reports_per_method.items()],
+                key=lambda x: x[3], reverse=True) + [stats_all],
+            headers=['method', 'all reports', 'failures', 'failures [%]', 'claimed failures', 'claimed failures [%]'],
             floatfmt=".1f",
             tablefmt=self.output)
 
