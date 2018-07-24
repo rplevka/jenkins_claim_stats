@@ -13,6 +13,7 @@ import statistics
 import shutil
 
 import lib
+import timegraph
 
 logging.basicConfig(level=logging.INFO)
 
@@ -290,6 +291,12 @@ class ClaimsCli(object):
             floatfmt=".3f"
         )
 
+    def timegraph(self):
+        for n, b in lib.config.get_builds(self.job_group).items():
+            f = "/tmp/timegraph-%s-build%s.svg" % (n, b['build'])
+            timegraph.draw(self.results, f, b['tier'])
+            logging.info("Generated %s" % f)
+
     def handle_args(self):
         parser = argparse.ArgumentParser(
             description='Manipulate Jenkins claims with grace')
@@ -407,6 +414,10 @@ class ClaimsCli(object):
         # Show tests history
         elif args.history:
             self.history()
+
+        # Generate time graphs per tier
+        elif args.timegraph:
+            self.timegraph()
 
         return 0
 
