@@ -1,3 +1,6 @@
 *.pyc
 config.yaml
 kb.json
+*.swp
+.cache/
+.pytest_cache/
