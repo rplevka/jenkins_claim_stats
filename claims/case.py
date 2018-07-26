@@ -1,5 +1,6 @@
 import collections
 import re
+import logging
 
 
 class Case(collections.UserDict):

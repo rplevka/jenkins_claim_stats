@@ -16,7 +16,7 @@ class TestClaimsCli(object):
         f = io.StringIO()
         with pytest.raises(SystemExit) as e:
             with redirect_stdout(f):
-                claims.cmd.main()
+                claims.cmd.ClaimsCli().handle_args()
         assert e.value.code == 0
         assert 'Manipulate Jenkins claims with grace' in f.getvalue()
         assert 'optional arguments:' in f.getvalue()

@@ -6,6 +6,9 @@ import logging
 import urllib3
 import requests
 
+from .config import config
+from .case import Case
+
 
 def request_get(url, params=None, expected_codes=[200], cached=True, stream=False):
     # If available, read it from cache
