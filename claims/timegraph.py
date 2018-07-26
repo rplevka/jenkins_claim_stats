@@ -5,8 +5,6 @@ import logging
 import datetime
 import svgwrite
 
-import lib
-
 
 STATUS_COLOR = {
 'FAILED': 'red',

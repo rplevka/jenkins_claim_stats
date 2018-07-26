@@ -12,8 +12,7 @@ import collections
 import statistics
 import shutil
 
-import lib
-import timegraph
+import claims
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,7 +33,7 @@ class ClaimsCli(object):
         if not self._results:
             self._results = {}
         if self.job_group not in self._results:
-            self._results[self.job_group] = lib.Report(self.job_group)
+            self._results[self.job_group] = claims.Report(self.job_group)
             if self.grep_results:
                 self._results[self.job_group] \
                     = [r for r in self._results[self.job_group]
@@ -44,7 +43,7 @@ class ClaimsCli(object):
     @property
     def rules(self):
         if not self._rules:
-            self._rules = lib.Ruleset()
+            self._rules = claims.Ruleset()
             if self.grep_rules:
                 self._rules = [r for r in self._rules
                                if re.search(self.grep_rules, r['reason'])]
@@ -65,7 +64,7 @@ class ClaimsCli(object):
                 tablefmt=self.output))
 
     def clean_cache(self):
-        d = os.path.join(lib.CACHEDIR, self.job_group)
+        d = os.path.join(claims.CACHEDIR, self.job_group)
         try:
             shutil.rmtree(d)
             logging.info("Removed %s" % d)
@@ -75,23 +74,23 @@ class ClaimsCli(object):
     def show_failed(self):
         self._table(
             [[r['testName']] for r in self.results
-             if r['status'] in lib.Case.FAIL_STATUSES],
+             if r['status'] in claims.Case.FAIL_STATUSES],
             headers=['failed test name'], tablefmt=self.output)
 
     def show_claimed(self):
         self._table(
             [[r['testName'], r['testActions'][0].get('reason')] for r in self.results
-             if r['status'] in lib.Case.FAIL_STATUSES and r['testActions'][0].get('reason')],
+             if r['status'] in claims.Case.FAIL_STATUSES and r['testActions'][0].get('reason')],
             headers=['claimed test name', 'claim reason'], tablefmt=self.output)
 
     def show_unclaimed(self):
         self._table(
             [[r['testName']] for r in self.results
-             if r['status'] in lib.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
+             if r['status'] in claims.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
             headers=['unclaimed test name'], tablefmt=self.output)
 
     def show_claimable(self):
-        claimable = lib.claim_by_rules(self.results, self.rules, dryrun=True)
+        claimable = claims.claim_by_rules(self.results, self.rules, dryrun=True)
         self._table(
             [[r['testName']] for r in claimable],
             headers=['claimable test name'], tablefmt=self.output)
@@ -123,7 +122,7 @@ class ClaimsCli(object):
                 break
 
     def claim(self):
-        claimed = lib.claim_by_rules(self.results, self.rules, dryrun=False)
+        claimed = claims.claim_by_rules(self.results, self.rules, dryrun=False)
         self._table(
             [[r['testName']] for r in claimed],
             headers=['claimed test name'], tablefmt=self.output)
@@ -138,7 +137,7 @@ class ClaimsCli(object):
 
         stat_all = len(self.results)
         reports_fails = [i for i in self.results
-                         if i['status'] in lib.Case.FAIL_STATUSES]
+                         if i['status'] in claims.Case.FAIL_STATUSES]
         stat_failed = len(reports_fails)
         reports_claimed = [i for i in reports_fails
                            if i['testActions'][0].get('reason')]
@@ -148,12 +147,12 @@ class ClaimsCli(object):
                      stat_all), stat_claimed, _perc(stat_claimed, stat_failed)]
 
         stats = []
-        builds = lib.config.get_builds(self.job_group).values()
+        builds = claims.config.get_builds(self.job_group).values()
         for t in [i['tier'] for i in builds]:
             filtered = [r for r in self.results if r['tier'] == t]
             stat_all_tiered = len(filtered)
             reports_fails_tiered = [i for i in filtered
-                                    if i['status'] in lib.Case.FAIL_STATUSES]
+                                    if i['status'] in claims.Case.FAIL_STATUSES]
             stat_failed_tiered = len(reports_fails_tiered)
             reports_claimed_tiered = [i for i in reports_fails_tiered
                                       if i['testActions'][0].get('reason')]
@@ -247,7 +246,7 @@ class ClaimsCli(object):
         matrix = collections.OrderedDict()
 
         # Load tests results
-        job_groups = lib.config['job_groups'].keys()
+        job_groups = claims.config['job_groups'].keys()
         for job_group in job_groups:
             logging.info('Loading job group %s' % job_group)
             self.job_group = job_group
@@ -292,7 +291,7 @@ class ClaimsCli(object):
         )
 
     def timegraph(self):
-        for n, b in lib.config.get_builds(self.job_group).items():
+        for n, b in claims.config.get_builds(self.job_group).items():
             f = "/tmp/timegraph-%s-build%s.svg" % (n, b['build'])
             timegraph.draw(self.results, f, b['tier'])
             logging.info("Generated %s" % f)
@@ -420,12 +419,3 @@ class ClaimsCli(object):
             self.timegraph()
 
         return 0
-
-
-def main():
-    """Main program"""
-    return ClaimsCli().handle_args()
-
-
-if __name__ == "__main__":
-    main()
