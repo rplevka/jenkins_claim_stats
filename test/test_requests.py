@@ -5,7 +5,8 @@ import requests
 import tempfile
 import pytest
 
-import claims.utils
+import claims
+
 
 class TestClaimsRequestWrapper():
 

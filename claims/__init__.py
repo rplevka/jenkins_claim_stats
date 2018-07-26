@@ -6,5 +6,6 @@ from .ruleset import Ruleset
 from .utils import request_get, claim_by_rules
 from .cmd import ClaimsCli
 
+
 # Create shared config file
 config = Config()

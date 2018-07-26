@@ -6,6 +6,7 @@ import pytest
 
 import claims.timegraph
 
+
 class TestTimegraph():
 
     def test_overlaps(self):

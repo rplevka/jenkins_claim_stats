@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-import claims.case
+import claims
+
 
 def test_rule_matches():
     checkme = {
@@ -9,7 +10,7 @@ def test_rule_matches():
         'greeting': 'Hello world',
         'area': 'IT Crowd',
     }
-    result = claims.case.Case(checkme)
+    result = claims.Case(checkme)
 
     assert result.matches_to_rule({'field': 'greeting', 'pattern': 'Hel+o'}) == True
     assert result.matches_to_rule({'field': 'greeting', 'pattern': 'This is not there'}) == False
