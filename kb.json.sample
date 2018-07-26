@@ -1,5 +1,6 @@
 [
   {
+    "field": "errorDetails"
     "pattern": "^[rR]egex\s[eE]xpre[s]{2}ion",
     "reason": "my poor excuse for a failed test"
   }
