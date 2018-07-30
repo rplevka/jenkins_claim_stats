@@ -64,7 +64,7 @@ class ClaimsCli(object):
                 tablefmt=self.output))
 
     def clean_cache(self):
-        d = os.path.join(claims.CACHEDIR, self.job_group)
+        d = os.path.join(claims.config.config.CACHEDIR, self.job_group)
         try:
             shutil.rmtree(d)
             logging.info("Removed %s" % d)
