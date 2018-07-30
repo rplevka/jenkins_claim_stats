@@ -1,10 +1,14 @@
 import collections
 import yaml
+import json
 import logging
+
+from .utils import request_get
 
 
 class Config(collections.UserDict):
 
+    FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
     LATEST = 'latest'   # how do we call latest job group in the config?
     CACHEDIR = '.cache/'   # where is the cache stored
 
@@ -29,7 +33,8 @@ class Config(collections.UserDict):
 
     def init_headers(self):
         url = '{0}/crumbIssuer/api/json'.format(self['url'])
-        crumb_data = request_get(url, params=None, expected_codes=[200], cached=False)
+        crumb_data = request_get(url, self['usr'], self['pwd'],
+            params=None, expected_codes=[200], cached=False)
         crumb = json.loads(crumb_data)
         self['headers'] = {crumb['crumbRequestField']: crumb['crumb']}
 

@@ -74,19 +74,19 @@ class ClaimsCli(object):
     def show_failed(self):
         self._table(
             [[r['testName']] for r in self.results
-             if r['status'] in claims.Case.FAIL_STATUSES],
+             if r['status'] in config.FAIL_STATUSES],
             headers=['failed test name'], tablefmt=self.output)
 
     def show_claimed(self):
         self._table(
             [[r['testName'], r['testActions'][0].get('reason')] for r in self.results
-             if r['status'] in claims.Case.FAIL_STATUSES and r['testActions'][0].get('reason')],
+             if r['status'] in config.FAIL_STATUSES and r['testActions'][0].get('reason')],
             headers=['claimed test name', 'claim reason'], tablefmt=self.output)
 
     def show_unclaimed(self):
         self._table(
             [[r['testName']] for r in self.results
-             if r['status'] in claims.Case.FAIL_STATUSES and not r['testActions'][0].get('reason')],
+             if r['status'] in config.FAIL_STATUSES and not r['testActions'][0].get('reason')],
             headers=['unclaimed test name'], tablefmt=self.output)
 
     def show_claimable(self):
@@ -137,7 +137,7 @@ class ClaimsCli(object):
 
         stat_all = len(self.results)
         reports_fails = [i for i in self.results
-                         if i['status'] in claims.Case.FAIL_STATUSES]
+                         if i['status'] in config.FAIL_STATUSES]
         stat_failed = len(reports_fails)
         reports_claimed = [i for i in reports_fails
                            if i['testActions'][0].get('reason')]
@@ -152,7 +152,7 @@ class ClaimsCli(object):
             filtered = [r for r in self.results if r['tier'] == t]
             stat_all_tiered = len(filtered)
             reports_fails_tiered = [i for i in filtered
-                                    if i['status'] in claims.Case.FAIL_STATUSES]
+                                    if i['status'] in config.FAIL_STATUSES]
             stat_failed_tiered = len(reports_fails_tiered)
             reports_claimed_tiered = [i for i in reports_fails_tiered
                                       if i['testActions'][0].get('reason')]

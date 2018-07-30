@@ -6,11 +6,8 @@ import logging
 import urllib3
 import requests
 
-from .config import config
-from .case import Case
 
-
-def request_get(url, params=None, expected_codes=[200], cached=True, stream=False):
+def request_get(url, user, password, params=None, expected_codes=[200], cached=True, stream=False):
     # If available, read it from cache
     if cached and not stream and os.path.isfile(cached):
         with open(cached, 'r') as fp:
@@ -21,7 +18,7 @@ def request_get(url, params=None, expected_codes=[200], cached=True, stream=Fals
     response = requests.get(
         url,
         auth=requests.auth.HTTPBasicAuth(
-            config['usr'], config['pwd']),
+            user, password),
         params=params,
         verify=False
     )
@@ -50,15 +47,3 @@ def request_get(url, params=None, expected_codes=[200], cached=True, stream=Fals
             fp.write(response.text)
 
     return response.text
-
-
-def claim_by_rules(report, rules, dryrun=False):
-    claimed = []
-    for rule in rules:
-        for case in [i for i in report if i['status'] in Case.FAIL_STATUSES and not i['testActions'][0].get('reason')]:
-            if case.matches_to_rule(rule):
-                logging.debug(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
-                if not dryrun:
-                    case.push_claim(rule['reason'])
-                claimed.append(case)
-    return claimed

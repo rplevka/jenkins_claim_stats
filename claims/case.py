@@ -1,6 +1,10 @@
 import collections
 import re
 import logging
+import datetime
+import requests
+
+from .config import config
 
 
 class Case(collections.UserDict):
@@ -8,7 +12,6 @@ class Case(collections.UserDict):
     Result of one test case
     """
 
-    FAIL_STATUSES = ("FAILED", "ERROR", "REGRESSION")
     LOG_DATE_REGEXP = re.compile('^([0-9]{4}-[01][0-9]-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}) -')
     LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -129,3 +132,15 @@ class Case(collections.UserDict):
             "Make sure detected start date is not below end date and vice versa"
         self['start'] = start
         self['end'] = end
+
+
+def claim_by_rules(report, rules, dryrun=False):
+    claimed = []
+    for rule in rules:
+        for case in [i for i in report if i['status'] in config.FAIL_STATUSES and not i['testActions'][0].get('reason')]:
+            if case.matches_to_rule(rule):
+                logging.debug(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
+                if not dryrun:
+                    case.push_claim(rule['reason'])
+                claimed.append(case)
+    return claimed

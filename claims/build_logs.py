@@ -1,7 +1,13 @@
 import os
 import re
+import tempfile
+import subprocess
+import logging
+import shutil
+import datetime
 
 from .config import config
+from .utils import request_get
 
 
 class ForemanDebug(object):
@@ -15,7 +21,8 @@ class ForemanDebug(object):
         if self._extracted is None:
             fp, fname = tempfile.mkstemp()
             print(fname)
-            request_get(self._url, cached=fname, stream=True)
+            request_get(self._url, config['usr'], config['pwd'],
+                cached=fname, stream=True)
             tmpdir = tempfile.mkdtemp()
             subprocess.call(['tar', '-xf', fname, '--directory', tmpdir])
             logging.debug('Extracted to %s' % tmpdir)
