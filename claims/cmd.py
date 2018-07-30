@@ -13,6 +13,7 @@ import statistics
 import shutil
 
 import claims
+from claims.config import config
 
 logging.basicConfig(level=logging.INFO)
 
@@ -64,7 +65,7 @@ class ClaimsCli(object):
                 tablefmt=self.output))
 
     def clean_cache(self):
-        d = os.path.join(claims.config.config.CACHEDIR, self.job_group)
+        d = os.path.join(config.CACHEDIR, self.job_group)
         try:
             shutil.rmtree(d)
             logging.info("Removed %s" % d)
