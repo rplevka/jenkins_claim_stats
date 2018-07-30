@@ -50,8 +50,8 @@ class Report(collections.UserList):
             config['url'], job, build)
         build_data = request_get(
             build_url+'/testReport/api/json',
-            user=conf['usr'],
-            password=conf['pwd'],
+            user=config['usr'],
+            password=config['pwd'],
             params=config['pull_params'],
             expected_codes=[200, 404],
             cached=os.path.join(config.CACHEDIR, self.job_group, job, 'main.json'))
