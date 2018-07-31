@@ -13,7 +13,7 @@ import statistics
 import shutil
 
 import claims
-from claims.config import config
+from .config import config
 
 logging.basicConfig(level=logging.INFO)
 
@@ -148,7 +148,7 @@ class ClaimsCli(object):
                      stat_all), stat_claimed, _perc(stat_claimed, stat_failed)]
 
         stats = []
-        builds = claims.config.get_builds(self.job_group).values()
+        builds = config.get_builds(self.job_group).values()
         for t in [i['tier'] for i in builds]:
             filtered = [r for r in self.results if r['tier'] == t]
             stat_all_tiered = len(filtered)
@@ -247,7 +247,7 @@ class ClaimsCli(object):
         matrix = collections.OrderedDict()
 
         # Load tests results
-        job_groups = claims.config['job_groups'].keys()
+        job_groups = config['job_groups'].keys()
         for job_group in job_groups:
             logging.info('Loading job group %s' % job_group)
             self.job_group = job_group
@@ -292,9 +292,9 @@ class ClaimsCli(object):
         )
 
     def timegraph(self):
-        for n, b in claims.config.get_builds(self.job_group).items():
+        for n, b in config.get_builds(self.job_group).items():
             f = "/tmp/timegraph-%s-build%s.svg" % (n, b['build'])
-            timegraph.draw(self.results, f, b['tier'])
+            claims.timegraph.draw(self.results, f, b['tier'])
             logging.info("Generated %s" % f)
 
     def handle_args(self):

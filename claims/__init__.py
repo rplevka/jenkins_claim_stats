@@ -5,3 +5,4 @@ from .report import Report
 from .ruleset import Ruleset
 from .utils import request_get
 from .cmd import ClaimsCli
+from . import timegraph
