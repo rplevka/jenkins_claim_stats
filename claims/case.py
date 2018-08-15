@@ -142,5 +142,5 @@ def claim_by_rules(report, rules, dryrun=False):
                 logging.debug(u"{0}::{1} matching pattern for '{2}' on {3}".format(case['className'], case['name'], rule['reason'], case['url']))
                 if not dryrun:
                     case.push_claim(rule['reason'])
-                claimed.append(case)
+                claimed.append((case, rule))
     return claimed

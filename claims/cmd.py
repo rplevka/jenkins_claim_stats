@@ -93,8 +93,9 @@ class ClaimsCli(object):
     def show_claimable(self):
         claimable = claims.claim_by_rules(self.results, self.rules, dryrun=True)
         self._table(
-            [[r['testName']] for r in claimable],
-            headers=['claimable test name'], tablefmt=self.output)
+            [[i[0]['testName'], i[1]['reason']] for i in claimable],
+            headers=['claimable test name', 'claimable with reason'],
+            tablefmt=self.output)
 
     def show(self, test_class, test_name):
         MAXWIDTH = 100
@@ -125,8 +126,9 @@ class ClaimsCli(object):
     def claim(self):
         claimed = claims.claim_by_rules(self.results, self.rules, dryrun=False)
         self._table(
-            [[r['testName']] for r in claimed],
-            headers=['claimed test name'], tablefmt=self.output)
+            [[i[0]['testName'], i[1]['reason']] for i in claimed],
+            headers=['claimed test name', 'claimed with reason'],
+            tablefmt=self.output)
 
     def stats(self):
         def _perc(perc_from, perc_sum):
