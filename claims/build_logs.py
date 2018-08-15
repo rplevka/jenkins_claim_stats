@@ -20,7 +20,6 @@ class ForemanDebug(object):
     def extracted(self):
         if self._extracted is None:
             fp, fname = tempfile.mkstemp()
-            print(fname)
             request_get(self._url, config['usr'], config['pwd'],
                 cached=fname, stream=True)
             tmpdir = tempfile.mkdtemp()

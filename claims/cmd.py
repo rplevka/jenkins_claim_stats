@@ -343,7 +343,6 @@ class ClaimsCli(object):
                             help='Show also debug messages')
 
         args = parser.parse_args()
-        print(args)
 
         # Handle "--debug"
         if args.debug:
