@@ -296,7 +296,6 @@ class ClaimsCli(object):
 
     def diff(self):
         assert self.job_group_old, 'When using --diff, also specify --job-group-old'
-        logging.info('Diffing %s to %s' % (self.job_group_old, self.job_group))
 
         matrix = collections.OrderedDict()
 
@@ -336,18 +335,17 @@ class ClaimsCli(object):
                 stable += 1
 
         # Print diff findings
-        print("\nBad tests")
+        print("\nBad tests (%s)" % len(bad))
         self._table(
             [[k, "%s -> %s" % v] for k,v in bad.items()],
             headers=['test', 'state change'],
             tablefmt=self.output)
-        print("\nGood tests")
+        print("\nGood tests (%s)" % len(good))
         self._table(
             [[k, "%s -> %s" % v] for k,v in good.items()],
             headers=['test', 'state change'],
             tablefmt=self.output)
-        print("\nCount of tests that stayed same")
-        print(stable)
+        print("\nRest of the tests stayed same (%s)" % stable)
 
 
     def timegraph(self):
