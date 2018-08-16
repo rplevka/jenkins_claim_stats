@@ -19,11 +19,13 @@ class Case(collections.UserDict):
         self.data = data
 
     def __contains__(self, name):
-        return name in self.data or name in ('start', 'end', 'production.log')
+        return name in self.data or name in ('testName', 'testId', 'start', 'end', 'production.log')
 
     def __getitem__(self, name):
         if name == 'testName':
             self['testName'] = "%s.%s" % (self['className'], self['name'])
+        elif name == 'testId':
+            self['testId'] = "%s (tier%s, el%s)" % (self['testName'], self['tier'], self['distro'])
         if name in ('start', 'end') and \
             ('start' not in self.data or 'end' not in self.data):
             self.load_timings()

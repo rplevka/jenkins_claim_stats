@@ -74,26 +74,26 @@ class ClaimsCli(object):
 
     def show_failed(self):
         self._table(
-            [[r['testName']] for r in self.results
+            [[r['testId']] for r in self.results
              if r['status'] in config.FAIL_STATUSES],
             headers=['failed test name'], tablefmt=self.output)
 
     def show_claimed(self):
         self._table(
-            [[r['testName'], r['testActions'][0].get('reason')] for r in self.results
+            [[r['testId'], r['testActions'][0].get('reason')] for r in self.results
              if r['status'] in config.FAIL_STATUSES and r['testActions'][0].get('reason')],
             headers=['claimed test name', 'claim reason'], tablefmt=self.output)
 
     def show_unclaimed(self):
         self._table(
-            [[r['testName']] for r in self.results
+            [[r['testId']] for r in self.results
              if r['status'] in config.FAIL_STATUSES and not r['testActions'][0].get('reason')],
             headers=['unclaimed test name'], tablefmt=self.output)
 
     def show_claimable(self):
         claimable = claims.claim_by_rules(self.results, self.rules, dryrun=True)
         self._table(
-            [[i[0]['testName'], i[1]['reason']] for i in claimable],
+            [[i[0]['testId'], i[1]['reason']] for i in claimable],
             headers=['claimable test name', 'claimable with reason'],
             tablefmt=self.output)
 
@@ -126,7 +126,7 @@ class ClaimsCli(object):
     def claim(self):
         claimed = claims.claim_by_rules(self.results, self.rules, dryrun=False)
         self._table(
-            [[i[0]['testName'], i[1]['reason']] for i in claimed],
+            [[i[0]['testId'], i[1]['reason']] for i in claimed],
             headers=['claimed test name', 'claimed with reason'],
             tablefmt=self.output)
 
@@ -255,7 +255,7 @@ class ClaimsCli(object):
             self.job_group = job_group
             report = self.results
             for r in report:
-                t = "%s::%s@%s" % (r['className'], r['name'], r['distro'])
+                t = r['testId']
                 if t not in matrix:
                     matrix[t] = dict.fromkeys(job_group)
                 try:
