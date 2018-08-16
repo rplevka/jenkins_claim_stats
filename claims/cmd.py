@@ -24,6 +24,7 @@ class ClaimsCli(object):
 
     def __init__(self):
         self.job_group = self.LATEST
+        self.job_group_old = None
         self.grep_results = None
         self.grep_rules = None
         self._results = None
@@ -233,18 +234,18 @@ class ClaimsCli(object):
             floatfmt=".1f",
             tablefmt=self.output)
 
-    def history(self):
+    def _sanitize_state(self, state):
+        if state == 'REGRESSION':
+            state = 'FAILED'
+        if state == 'FIXED':
+            state = 'PASSED'
+        if state == 'PASSED':
+            return 0
+        if state == 'FAILED':
+            return 1
+        raise KeyError("Do not know how to handle state %s" % state)
 
-        def sanitize_state(state):
-            if state == 'REGRESSION':
-                state = 'FAILED'
-            if state == 'FIXED':
-                state = 'PASSED'
-            if state == 'PASSED':
-                return 0
-            if state == 'FAILED':
-                return 1
-            raise KeyError("Do not know how to handle state %s" % state)
+    def history(self):
 
         matrix = collections.OrderedDict()
 
@@ -259,7 +260,7 @@ class ClaimsCli(object):
                 if t not in matrix:
                     matrix[t] = dict.fromkeys(job_group)
                 try:
-                    state = sanitize_state(r['status'])
+                    state = self._sanitize_state(r['status'])
                 except KeyError:
                     continue   # e.g. state "SKIPPED"
                 matrix[t][job_group] = state
@@ -293,6 +294,62 @@ class ClaimsCli(object):
             floatfmt=".3f"
         )
 
+    def diff(self):
+        assert self.job_group_old, 'When using --diff, also specify --job-group-old'
+        logging.info('Diffing %s to %s' % (self.job_group_old, self.job_group))
+
+        matrix = collections.OrderedDict()
+
+        # Load tests results
+        state_good = 'GOOD'
+        state_bad = 'BAD'
+        states = {
+            0: state_good,
+            1: state_bad,
+        }
+        job_groups = (self.job_group_old, self.job_group)
+        for job_group in job_groups:
+            logging.info('Loading job group %s' % job_group)
+            self.job_group = job_group
+            for r in self.results:
+                t = r['testId']
+                if t not in matrix:
+                    matrix[t] = dict.fromkeys(job_groups)
+                try:
+                    state = states[self._sanitize_state(r['status'])]
+                except KeyError:
+                    state = r['status']
+                matrix[t][job_group] = state
+
+        good = collections.OrderedDict()
+        bad = collections.OrderedDict()
+        stable = 0
+
+        # Find tests that got better and tests that got worse
+        for test, jgs in matrix.items():
+            if jgs[self.job_group_old] != jgs[self.job_group]:
+                if jgs[self.job_group_old] == state_good:
+                    bad[test] = (jgs[self.job_group_old], jgs[self.job_group])
+                if jgs[self.job_group] == state_good:
+                    good[test] = (jgs[self.job_group_old], jgs[self.job_group])
+            else:
+                stable += 1
+
+        # Print diff findings
+        print("\nBad tests")
+        self._table(
+            [[k, "%s -> %s" % v] for k,v in bad.items()],
+            headers=['test', 'state change'],
+            tablefmt=self.output)
+        print("\nGood tests")
+        self._table(
+            [[k, "%s -> %s" % v] for k,v in good.items()],
+            headers=['test', 'state change'],
+            tablefmt=self.output)
+        print("\nCount of tests that stayed same")
+        print(stable)
+
+
     def timegraph(self):
         for n, b in config.get_builds(self.job_group).items():
             f = "/tmp/timegraph-%s-build%s.svg" % (n, b['build'])
@@ -324,6 +381,10 @@ class ClaimsCli(object):
                             help='Show stats for selected job group')
         parser.add_argument('--history', action='store_true',
                             help='Show how tests results and duration evolved')
+        parser.add_argument('--diff', action='store_true',
+                            help='Show which test result changed between two'
+                                 ' job groups. You will need --job-group'
+                                 ' and --job-group-old options set')
         parser.add_argument('--timegraph', action='store_true',
                             help='Generate time graph')
 
@@ -331,6 +392,8 @@ class ClaimsCli(object):
         parser.add_argument('--job-group', action='store',
                             help='Specify group of jobs to perform the action'
                                  ' with (default: latest)')
+        parser.add_argument('--job-group-old', action='store',
+                            help='Only used with --diff')
         parser.add_argument('--grep-results', action='store', metavar='REGEXP',
                             help='Only work with tests, whose'
                                  ' "className+name" matches the regexp')
@@ -356,6 +419,10 @@ class ClaimsCli(object):
             self.job_group = args.job_group
         logging.debug("Job group we are going to work with is %s"
             % self.job_group)
+        if args.job_group_old:
+            self.job_group_old = args.job_group_old
+        logging.debug("Old job group we are going to work with is %s"
+            % self.job_group_old)
 
         # Handle "--grep-results something"
         if args.grep_results:
@@ -415,6 +482,10 @@ class ClaimsCli(object):
         # Show tests history
         elif args.history:
             self.history()
+
+        # Show tests diff across two job groups
+        elif args.diff:
+            self.diff()
 
         # Generate time graphs per tier
         elif args.timegraph:
